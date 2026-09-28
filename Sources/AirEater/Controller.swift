@@ -6,36 +6,47 @@ import Carbon.HIToolbox
 /// Cmd+数字 はブラウザのタブ切り替えなど多くのアプリと衝突するので Option にしている
 private let superModifier = UInt32(optionKey)
 
-/// macOS がショートカットを用意しているのは Desktop 1…9 まで
-private let poolLimit = 9
+/// macOS がショートカットを用意しているのは Desktop 1…9 まで。
+/// 実在しない番号は切り替えに失敗するだけなので、プールは常に 1…9 にしておく
+private let poolDesktops = 1...9
 
 /// ホットキーを受けて、SpacePool を引いて Space を切り替える。
 @MainActor
 final class Controller {
   private let hotKeys = HotKeyCenter()
   private let markers = Markers()
-  private var tracker: WindowTracker?
+  private let tracker: WindowTracker
   private var refreshTimer: Timer?
 
-  func start() async {
-    let seen = await markers.install(upTo: poolLimit)
-    var pool = SpacePool(desktops: seen.keys.sorted())
-    for (desktop, windows) in seen {
-      pool.observe(desktop: desktop, windows: windows)
-    }
-    let tracker = WindowTracker(pool: pool, markers: markers.ids)
-    self.tracker = tracker
-    print("air-eater: Desktop \(pool.desktops) をプールにしました。workspace は \(pool.active)")
-    if pool.desktops.count < poolLimit {
-      print("air-eater: Desktop が \(poolLimit) 個ありません。Desktop を増やすか Ctrl+数字 のショートカットを有効にしてください")
-    }
+  init() {
+    tracker = WindowTracker(pool: SpacePool(desktops: poolDesktops), markers: markers)
+  }
 
-    // 起動前にいた Desktop は分からない (現在地はマーカーを置いて初めて分かる) ので、最初の workspace に戻る
-    _ = await switchDesktop(to: pool.active.first ?? 1)
+  func start() async {
+    warnAboutDisabledShortcuts()
+
+    // 現在地はマーカーを置いて初めて分かる。Desktop 1 は必ずあるので、Ctrl+1 を送って
+    // 切り替わっても、既に居て切り替わらなくても、その後の Space は Desktop 1 だと決まる
+    _ = await switchDesktop(to: 1)
+    await markers.placeIfMissing(on: 1)
+    tracker.refresh()
 
     observeWindows()
     registerHotKeys()
     print("air-eater: 準備できました")
+  }
+
+  private func warnAboutDisabledShortcuts() {
+    let symbolicHotKeys =
+      UserDefaults(suiteName: "com.apple.symbolichotkeys")?
+      .dictionary(forKey: "AppleSymbolicHotKeys") ?? [:]
+    let enabled = desktopsWithEnabledShortcut(symbolicHotKeys: symbolicHotKeys)
+    let disabled = poolDesktops.filter { !enabled.contains($0) }
+    guard !disabled.isEmpty else { return }
+    print(
+      "air-eater: Ctrl+\(disabled.map(String.init).joined(separator: ",")) が無効です。"
+        + "システム設定 ▸ キーボード ▸ キーボードショートカット ▸ Mission Control で有効にしてください"
+        + " (Desktop が足りないと項目自体が出ません)")
   }
 
   // MARK: - 観測
@@ -44,44 +55,59 @@ final class Controller {
     NSWorkspace.shared.notificationCenter.addObserver(
       forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
     ) { [weak self] _ in
-      MainActor.assumeIsolated { self?.tracker?.refresh() }
+      MainActor.assumeIsolated { self?.tracker.refresh() }
     }
     // AIDEV-NOTE: PoC ではウィンドウの生成・破棄を AXObserver で購読せず、1 秒ごとの走査で拾う。
     // 起動直後のウィンドウが workspace に数えられるまで最大 1 秒遅れる
     refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-      MainActor.assumeIsolated { self?.tracker?.refresh() }
+      MainActor.assumeIsolated { self?.tracker.refresh() }
     }
   }
 
   // MARK: - 操作
 
   private func goToWorkspace(_ workspace: Int) async {
-    guard let tracker, let target = tracker.pool.desktop(forWorkspace: workspace) else { return }
+    guard let target = tracker.pool.desktop(forWorkspace: workspace) else { return }
     await go(to: target)
   }
 
   private func goToNeighbor(_ direction: SpacePool.Direction) async {
-    guard let tracker, let current = tracker.current,
+    guard let current = tracker.current,
       let target = tracker.pool.desktop(nextTo: current, direction: direction)
     else { return }
     await go(to: target)
   }
 
+  /// 空き候補の Desktop へ行き、空だったら端末を開く。
+  /// まだ訪れていない Desktop も空き候補に入るので、着いて窓があれば次の候補へ進む
   private func openNewWorkspace() async {
-    guard let tracker else { return }
     tracker.refresh()
-    guard let target = tracker.pool.firstEmpty else {
-      print("air-eater: 空いている Desktop がありません")
-      return
+    while let target = tracker.pool.firstEmpty {
+      guard await go(to: target) else { return }
+      if !tracker.pool.active.contains(target) {
+        await launchTerminal()
+        return
+      }
     }
-    await go(to: target)
-    await launchTerminal()
+    print("air-eater: 空いている Desktop がありません")
   }
 
-  private func go(to desktop: Int) async {
-    guard tracker?.current != desktop else { return }
-    _ = await switchDesktop(to: desktop)
-    tracker?.refresh()
+  /// desktop へ切り替え、初めて来た Desktop ならマーカーを置く。着けなければ false。
+  @discardableResult
+  private func go(to desktop: Int) async -> Bool {
+    let origin = tracker.current
+    guard origin != desktop else { return true }
+    guard await switchDesktop(to: desktop) else {
+      // 今いる Desktop が分からないときは、既に desktop に居て切り替わらなかった可能性もある。
+      // そのときはマーカーを置かず、報告もしない
+      if origin != nil {
+        print("air-eater: Desktop \(desktop) に切り替えられませんでした。Desktop が無いか Ctrl+\(desktop) が無効です")
+      }
+      return false
+    }
+    await markers.placeIfMissing(on: desktop)
+    tracker.refresh()
+    return true
   }
 
   // MARK: - ホットキー

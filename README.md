@@ -36,7 +36,9 @@ Desktop が空になれば `active` から落ち、後ろの番号が自然に�
 
 ### 現在の Space はマーカーウィンドウで観測する
 
-現在の Space を返す公開 API は無い。起動時に各 Space へ 1×1 の透明ウィンドウを置き、`CGWindowListCopyWindowInfo(.optionOnScreenOnly, …)` に写ったマーカーで現在地を決める。`NSWorkspaceActiveSpaceDidChangeNotification` を契機に再評価するので、トラックパッドで直接切り替えても状態が追従する。
+現在の Space を返す公開 API は無い。air-eater が Ctrl+数字 で Desktop に着いたとき、その Space に 1×1 の透明ウィンドウ (マーカー) を置き、`CGWindowListCopyWindowInfo(.optionOnScreenOnly, …)` に写ったマーカーで現在地を決める。`NSWorkspaceActiveSpaceDidChangeNotification` を契機に再評価するので、マーカーを置いた Desktop 同士ならトラックパッドで直接切り替えても状態が追従する。
+
+起動時に全 Desktop を巡回することはしない。起動時は Desktop 1 にだけ行き、他の Desktop は初めて air-eater で移動したときにプールへ入る。Desktop やショートカットを後から足しても、再起動せずにそのまま使える。
 
 ## キーバインド
 
