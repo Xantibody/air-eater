@@ -1,8 +1,9 @@
 # AIDEV-NOTE: Swift 6.4 の Command Line Tools では、テストを書き換えた直後の
 # swift test が「plugin for module 'TestingMacros' not found」で不定期に落ちる
 # (再実行すると通る)。プラグインの場所を明示すると安定する。
-# --build-system native は Testing モジュール自体を見つけられないので使えない
-testing_plugins := `xcode-select -p` / "usr/lib/swift/host/plugins/testing"
+# --build-system native は Testing モジュール自体を見つけられないので使えない。
+# TOOLCHAIN_DIR は flake.nix の shellHook が CLT / Xcode のどちらかに合わせて決める
+testing_plugins := env("TOOLCHAIN_DIR") / "usr/lib/swift/host/plugins/testing"
 
 default: check
 

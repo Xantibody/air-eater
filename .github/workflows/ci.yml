@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 道具の一覧は flake.nix の devShell が持ち、手順は justfile が持つ。
+# ここでは `nix develop -c just <recipe>` を呼ぶだけにして、
+# 手元の `just check` と CI が食い違わないようにする
+#
+# Swift と macOS SDK はランナーの Xcode のものを使う (flake.nix の AIDEV-NOTE)。
+# Package.swift が .macOS(.v26) を要求するので、Xcode 26 が入った macos-26 で回す
+jobs:
+  static:
+    name: Format / Lint
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - run: nix flake check
+      - run: nix develop -c treefmt --fail-on-change
+      - run: nix develop -c just lint
+
+  test:
+    name: Build / Test
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - run: nix develop -c just build
+      - run: nix develop -c just test
