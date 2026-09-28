@@ -40,12 +40,14 @@ Desktop が空になれば `active` から落ち、後ろの番号が自然に�
 
 ## キーバインド
 
+Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り替えなど多くのアプリと衝突するため。
+
 | 操作 | キー | 実装 |
 | --- | --- | --- |
-| workspace N へ移動 | Super+1…9 | `active[N-1]` の物理番号に対応する Ctrl+数字 を送出 |
-| 隣の workspace へ移動 | Super+← → | Ctrl+矢印 を送出 |
-| 新しい workspace でアプリ起動 | Super+Return | 最小の空き Desktop へ切り替えてから起動 |
-| 四分割 | Super+H/J/K/L | Accessibility API でウィンドウの frame を書き込む |
+| workspace N へ移動 | Option+1…9 | `active[N-1]` の物理番号に対応する Ctrl+数字 を送出。N が workspace 数を超えたら空き Desktop へ |
+| 隣の workspace へ移動 | Option+[ / ] | 空き Desktop を飛ばした隣の workspace の Ctrl+数字 を送出 |
+| 新しい workspace で端末を起動 | Option+Return | 最小の空き Desktop へ切り替えてから Ghostty (無ければ Terminal) を新しいインスタンスで起動 |
+| 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
 | ウィンドウを別 workspace へ移動 | — | v1 では非対応 |
 
 ホットキーは `RegisterEventHotKey` (Carbon) でプロセス内に持つ。skhd などの外部デーモンは要らない。
@@ -89,9 +91,9 @@ direnv を使わない場合は `nix develop` でシェルに入る。
 
 ## ロードマップ
 
-1. ホットキーを握って Space を切り替える
-2. マーカーウィンドウで現在の Space を特定する
-3. AXObserver でウィンドウの生成・破棄を追跡する
-4. 論理番号の導出と新規 workspace でのアプリ起動
-5. 四分割
-6. 設定ファイルと永続化
+- [x] ホットキーを握って Space を切り替える
+- [x] マーカーウィンドウで現在の Space を特定する
+- [ ] AXObserver でウィンドウの生成・破棄を追跡する (PoC は 1 秒ごとの走査)
+- [x] 論理番号の導出と新規 workspace でのアプリ起動
+- [x] 半分割
+- [ ] 設定ファイルと永続化
