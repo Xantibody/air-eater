@@ -60,6 +60,14 @@ final class Controller {
     ) { [weak self] _ in
       MainActor.assumeIsolated { self?.spaceDidChange() }
     }
+    // 前面に出たアプリの窓が別の Space にあると、macOS がその Space へ移すことがある。
+    // air-eater が送っていない Space の変化の原因を追えるように記録する
+    NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+    ) { notification in
+      let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+      log("前面のアプリ → \(app?.localizedName ?? "?")")
+    }
     // AIDEV-NOTE: PoC ではウィンドウの生成・破棄を AXObserver で購読せず、1 秒ごとの走査で拾う。
     // 起動直後のウィンドウが workspace に数えられるまで最大 1 秒遅れる
     refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -68,7 +76,7 @@ final class Controller {
   }
 
   private func spaceDidChange() {
-    log("Space が変わった")
+    log("Space が変わった (前面: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"))")
     tracker.refresh()
     guard let pending = pendingSwitch,
       ContinuousClock.now - pending.at < manualSwitchWindow
