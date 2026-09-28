@@ -3,3 +3,6 @@ included:
   - Tests
 excluded:
   - .build
+# 見た目は swift format に任せる。swift format は複数行の末尾にカンマを付けるので衝突する
+disabled_rules:
+  - trailing_comma
