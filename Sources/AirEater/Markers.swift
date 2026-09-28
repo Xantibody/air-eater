@@ -7,6 +7,7 @@ import AppKit
 @MainActor
 final class Markers {
   private var windows: [Int: NSWindow] = [:]
+  private var placing: Set<Int> = []
 
   var ids: [Int: CGWindowID] {
     windows.mapValues { CGWindowID($0.windowNumber) }
@@ -15,7 +16,11 @@ final class Markers {
   /// 今表示している Space を desktop とみなし、まだマーカーが無ければ置く。
   /// Ctrl+desktop で着いた直後など、現在地が desktop だと分かっているときだけ呼ぶ。
   func placeIfMissing(on desktop: Int) async {
-    guard windows[desktop] == nil else { return }
+    // air-eater が送った Ctrl+N はキー監視にも見えるので、同じ Desktop に対して
+    // 2 経路から呼ばれることがある。待っている間の 2 回目は placing で弾く
+    guard windows[desktop] == nil, !placing.contains(desktop) else { return }
+    placing.insert(desktop)
+    defer { placing.remove(desktop) }
     // AIDEV-NOTE: 切り替えアニメーションの途中で作ると、マーカーが移動元の Space に
     // 残ることがある。通知の直後ではなく少し待ってから作る
     try? await Task.sleep(for: .milliseconds(300))

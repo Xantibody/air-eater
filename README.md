@@ -52,7 +52,7 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 | 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
 | ウィンドウを別 workspace へ移動 | — | v1 では非対応 |
 
-ホットキーは `RegisterEventHotKey` (Carbon) でプロセス内に持つ。skhd などの外部デーモンは要らない。
+ホットキーは CGEventTap でプロセス内に持つ。skhd などの外部デーモンは要らない。`RegisterEventHotKey` (Carbon) は Option だけを修飾キーにすると実機で発火しなかったので使っていない。キー監視は手で押した Ctrl+数字 も見ているので、air-eater を通さずに切り替えた Desktop も番号が分かる (トラックパッドのスワイプは分からない)。
 
 ## 事前設定
 

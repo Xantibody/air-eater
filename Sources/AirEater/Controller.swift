@@ -1,22 +1,22 @@
 import AirEaterCore
 import AppKit
-import Carbon.HIToolbox
-
-/// Hyprland の Super に当たる修飾キー。
-/// Cmd+数字 はブラウザのタブ切り替えなど多くのアプリと衝突するので Option にしている
-private let superModifier = UInt32(optionKey)
 
 /// macOS がショートカットを用意しているのは Desktop 1…9 まで。
 /// 実在しない番号は切り替えに失敗するだけなので、プールは常に 1…9 にしておく
 private let poolDesktops = 1...9
 
-/// ホットキーを受けて、SpacePool を引いて Space を切り替える。
+/// 手で押した Ctrl+数字 と Space の変化を結び付ける猶予。切り替えアニメーションより長く取る
+private let manualSwitchWindow: Duration = .milliseconds(1500)
+
+/// Option+キー を受けて、SpacePool を引いて Space を切り替える。
 @MainActor
 final class Controller {
-  private let hotKeys = HotKeyCenter()
+  private let keyTap = KeyTap()
   private let markers = Markers()
   private let tracker: WindowTracker
   private var refreshTimer: Timer?
+  /// 手で押された Ctrl+数字。直後に Space が変われば、そこがその番号の Desktop
+  private var pendingSwitch: (desktop: Int, at: ContinuousClock.Instant)?
 
   init() {
     tracker = WindowTracker(pool: SpacePool(desktops: poolDesktops), markers: markers)
@@ -32,7 +32,10 @@ final class Controller {
     tracker.refresh()
 
     observeWindows()
-    registerHotKeys()
+    guard startKeyTap() else {
+      log("キー監視を始められませんでした。アクセシビリティ権限を確認して再起動してください")
+      return
+    }
     log("準備できました")
   }
 
@@ -55,15 +58,27 @@ final class Controller {
     NSWorkspace.shared.notificationCenter.addObserver(
       forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
     ) { [weak self] _ in
-      MainActor.assumeIsolated {
-        log("Space が変わった")
-        self?.tracker.refresh()
-      }
+      MainActor.assumeIsolated { self?.spaceDidChange() }
     }
     // AIDEV-NOTE: PoC ではウィンドウの生成・破棄を AXObserver で購読せず、1 秒ごとの走査で拾う。
     // 起動直後のウィンドウが workspace に数えられるまで最大 1 秒遅れる
     refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated { self?.tracker.refresh() }
+    }
+  }
+
+  private func spaceDidChange() {
+    log("Space が変わった")
+    tracker.refresh()
+    guard let pending = pendingSwitch,
+      ContinuousClock.now - pending.at < manualSwitchWindow
+    else { return }
+    pendingSwitch = nil
+    // AIDEV-NOTE: 猶予の間に別の理由 (アプリの切り替えなど) で Space が変わると、
+    // 違う Space にこの番号のマーカーを置いてしまう。PoC では許容する
+    Task {
+      await markers.placeIfMissing(on: pending.desktop)
+      tracker.refresh()
     }
   }
 
@@ -130,36 +145,27 @@ final class Controller {
     return true
   }
 
-  // MARK: - ホットキー
+  // MARK: - キー入力
 
-  private func registerHotKeys() {
-    for workspace in 1...digitKeyCodes.count {
-      bind(digitKeyCodes[workspace - 1], "\(workspace)") { await $0.goToWorkspace(workspace) }
+  private func startKeyTap() -> Bool {
+    keyTap.onCommand = { [weak self] command in
+      guard let self else { return }
+      log("\(command) が押された")
+      Task { await self.perform(command) }
     }
-    bind(CGKeyCode(kVK_ANSI_LeftBracket), "[") { await $0.goToNeighbor(.previous) }
-    bind(CGKeyCode(kVK_ANSI_RightBracket), "]") { await $0.goToNeighbor(.next) }
-    bind(CGKeyCode(kVK_Return), "Return") { await $0.openNewWorkspace() }
-    // vim の hjkl と同じ向き
-    let tiles: [(Int, Tile)] = [
-      (kVK_ANSI_H, .left), (kVK_ANSI_J, .bottom), (kVK_ANSI_K, .top), (kVK_ANSI_L, .right),
-    ]
-    let letters: [Tile: String] = [.left: "H", .bottom: "J", .top: "K", .right: "L"]
-    for (keyCode, tile) in tiles {
-      bind(CGKeyCode(keyCode), letters[tile] ?? "\(tile)") { _ in tileFocusedWindow(tile) }
+    keyTap.onDesktopSwitchKey = { [weak self] desktop in
+      log("Ctrl+\(desktop) を検知")
+      self?.pendingSwitch = (desktop, .now)
     }
+    return keyTap.start()
   }
 
-  private func bind(
-    _ keyCode: CGKeyCode, _ name: String, _ action: @escaping @MainActor (Controller) async -> Void
-  ) {
-    do {
-      try hotKeys.register(keyCode: UInt32(keyCode), modifiers: superModifier) { [weak self] in
-        guard let self else { return }
-        log("Option+\(name) が押された")
-        Task { await action(self) }
-      }
-    } catch {
-      log("Option+\(name) を登録できませんでした: \(error)")
+  private func perform(_ command: Command) async {
+    switch command {
+    case .workspace(let workspace): await goToWorkspace(workspace)
+    case .neighbor(let direction): await goToNeighbor(direction)
+    case .newWorkspace: await openNewWorkspace()
+    case .tile(let tile): tileFocusedWindow(tile)
     }
   }
 }
