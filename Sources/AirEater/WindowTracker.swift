@@ -23,11 +23,27 @@ final class WindowTracker {
   func refresh() {
     let onScreen = windowList(.optionOnScreenOnly)
     let onScreenIDs = Set(onScreen.compactMap { $0[kCGWindowNumber as String] as? CGWindowID })
+    let before = (current, pool.description)
     current = currentDesktop(markers: markers.ids, onScreen: onScreenIDs)
+    let visible = managedWindows(in: onScreen, excludingProcess: getpid())
     if let current {
-      pool.observe(
-        desktop: current, windows: managedWindows(in: onScreen, excludingProcess: getpid()))
+      pool.observe(desktop: current, windows: visible)
     }
     pool.retain(existing: managedWindows(in: windowList(.optionAll), excludingProcess: getpid()))
+
+    // 1 秒ごとに呼ばれるので、変わったときだけ出す
+    guard before != (current, pool.description) else { return }
+    let place = current.map { "Desktop \($0)" } ?? "不明 (マーカーの無い Space)"
+    log("現在地 \(place) / プール \(pool.description) / 見えている窓 \(names(of: visible, in: onScreen))")
+  }
+
+  private func names(of windows: Set<CGWindowID>, in windowList: [[String: Any]]) -> String {
+    let entries = windowList.compactMap { info -> String? in
+      guard let id = info[kCGWindowNumber as String] as? CGWindowID, windows.contains(id) else {
+        return nil
+      }
+      return "\(id) \(info[kCGWindowOwnerName as String] as? String ?? "?")"
+    }
+    return entries.isEmpty ? "なし" : entries.joined(separator: ", ")
   }
 }

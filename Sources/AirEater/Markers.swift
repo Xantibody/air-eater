@@ -19,7 +19,9 @@ final class Markers {
     // AIDEV-NOTE: 切り替えアニメーションの途中で作ると、マーカーが移動元の Space に
     // 残ることがある。通知の直後ではなく少し待ってから作る
     try? await Task.sleep(for: .milliseconds(300))
-    windows[desktop] = Self.makeMarker()
+    let marker = Self.makeMarker()
+    windows[desktop] = marker
+    log("Desktop \(desktop) にマーカーを置いた (window \(marker.windowNumber))")
   }
 
   private static func makeMarker() -> NSWindow {

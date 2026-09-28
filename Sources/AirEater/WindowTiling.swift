@@ -5,15 +5,20 @@ import AppKit
 @MainActor
 func tileFocusedWindow(_ tile: Tile) {
   let system = AXUIElementCreateSystemWide()
-  guard
-    let app = element(system, kAXFocusedApplicationAttribute),
-    let window = element(app, kAXFocusedWindowAttribute),
-    let primary = NSScreen.screens.first
-  else { return }
+  guard let app = element(system, kAXFocusedApplicationAttribute) else {
+    log("\(tile) → フォーカス中のアプリが取れない (アクセシビリティ権限を確認)")
+    return
+  }
+  guard let window = element(app, kAXFocusedWindowAttribute) else {
+    log("\(tile) → フォーカス中の窓が無い")
+    return
+  }
+  guard let primary = NSScreen.screens.first else { return }
 
   let screen = screen(containing: window, primaryHeight: primary.frame.height) ?? primary
   let frame = accessibilityFrame(
     fromCocoa: tile.frame(in: screen.visibleFrame), primaryScreenHeight: primary.frame.height)
+  log("\(tile) → \(screen.localizedName) の \(frame) (AX 座標) に寄せる")
 
   // 最小サイズを持つアプリは 1 回目の size を丸めて返す。position を決めた後に
   // もう一度 size を書くと、1 回目で弾かれた分を吸収できる

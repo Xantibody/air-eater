@@ -9,7 +9,12 @@ private let switchTimeout: Duration = .milliseconds(1500)
 @MainActor
 func switchDesktop(to desktop: Int) async -> Bool {
   guard let stroke = keyStroke(switchingTo: desktop) else { return false }
-  return await waitForSpaceChange(timeout: switchTimeout) { post(stroke) }
+  let clock = ContinuousClock()
+  let start = clock.now
+  let switched = await waitForSpaceChange(timeout: switchTimeout) { post(stroke) }
+  let elapsed = (clock.now - start).formatted(.units(allowed: [.milliseconds]))
+  log("Ctrl+\(desktop) → \(switched ? "切り替わった" : "切り替わらず") (\(elapsed))")
+  return switched
 }
 
 /// 通知の購読を始めてから trigger を呼び、次の activeSpaceDidChange を待つ。

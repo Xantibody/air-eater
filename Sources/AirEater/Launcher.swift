@@ -13,14 +13,15 @@ func launchTerminal() async {
     let url = terminalBundleIDs.lazy.compactMap(workspace.urlForApplication(withBundleIdentifier:))
       .first
   else {
-    print("air-eater: 端末アプリが見つかりません: \(terminalBundleIDs)")
+    log("端末アプリが見つかりません: \(terminalBundleIDs)")
     return
   }
   let configuration = NSWorkspace.OpenConfiguration()
   configuration.createsNewApplicationInstance = true
   do {
-    _ = try await workspace.openApplication(at: url, configuration: configuration)
+    let app = try await workspace.openApplication(at: url, configuration: configuration)
+    log("\(url.lastPathComponent) を新しいインスタンスで起動した (pid \(app.processIdentifier))")
   } catch {
-    print("air-eater: \(url.lastPathComponent) を起動できませんでした: \(error)")
+    log("\(url.lastPathComponent) を起動できませんでした: \(error)")
   }
 }

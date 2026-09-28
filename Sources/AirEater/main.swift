@@ -5,12 +5,12 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
 if !requestAccessibilityPermission() {
-  print("air-eater: アクセシビリティ権限がありません。システム設定で許可してから再起動してください")
+  log("アクセシビリティ権限がありません。システム設定で許可してから再起動してください")
 }
 // 「最新の使用状況に基づいて操作スペースを並べ替える」が ON だと物理 Desktop 番号が裏で入れ替わる。
 // キーが無いときは既定の ON
 if UserDefaults(suiteName: "com.apple.dock")?.object(forKey: "mru-spaces") as? Bool ?? true {
-  print("air-eater: システム設定 ▸ デスクトップと Dock ▸「最新の使用状況に基づいて操作スペースを並べ替える」を OFF にしてください")
+  log("システム設定 ▸ デスクトップと Dock ▸「最新の使用状況に基づいて操作スペースを並べ替える」を OFF にしてください")
 }
 
 let controller = Controller()
