@@ -56,3 +56,14 @@ public struct SpacePool: Sendable {
     }
   }
 }
+
+extension SpacePool: CustomStringConvertible {
+  /// ログ用。観測済みの Desktop だけを "1:{10,11} 2:{}" の形で並べる。
+  public var description: String {
+    desktops.compactMap { desktop in
+      occupied[desktop].map { windows in
+        "\(desktop):{\(windows.sorted().map(String.init).joined(separator: ","))}"
+      }
+    }.joined(separator: " ")
+  }
+}
