@@ -117,3 +117,13 @@ final class WindowTracker {
     return entries.isEmpty ? "なし" : entries.joined(separator: ", ")
   }
 }
+
+/// AX で操作する相手のアプリ。前面のアプリを使い、その pid が取れないとき (Nix の kitty は
+/// NSWorkspace で pid が -1 になる) だけ、一番手前の通常の窓の持ち主にする
+@MainActor
+func targetApplication() -> WindowOwner? {
+  if let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier > 0 {
+    return WindowOwner(pid: app.processIdentifier, name: app.localizedName ?? "?")
+  }
+  return frontmostWindowOwner(in: windowList(.optionOnScreenOnly), excludingProcess: getpid())
+}

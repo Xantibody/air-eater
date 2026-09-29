@@ -4,14 +4,13 @@ import AppKit
 /// 最前面のアプリのフォーカス中ウィンドウを、そのウィンドウがある画面の tile に寄せる。
 @MainActor
 func tileFocusedWindow(_ tile: Tile) {
-  // 前面のアプリは NSWorkspace から PID で取る。システム全体の AX 要素に聞くと、
-  // 失敗したときにアプリ側と窓側のどちらで詰まったのかログから分からない
-  guard let frontmost = NSWorkspace.shared.frontmostApplication else {
-    log("\(tile) → 前面のアプリが無い")
+  // 相手のアプリの決め方は targetApplication を参照
+  guard let owner = targetApplication() else {
+    log("\(tile) → 相手のアプリが無い")
     return
   }
-  let appName = frontmost.localizedName ?? "?"
-  let app = AXUIElementCreateApplication(frontmost.processIdentifier)
+  let appName = owner.name
+  let app = AXUIElementCreateApplication(owner.pid)
   let window: AXUIElement
   switch element(app, kAXFocusedWindowAttribute) {
   case .success(let focused): window = focused

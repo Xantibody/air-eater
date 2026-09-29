@@ -1,29 +1,20 @@
 import AirEaterCore
 import AppKit
 
-/// 前面のアプリの「ウインドウ」メニューにある macOS 標準の配置を AX で押す。
+/// 手前の窓の持ち主のアプリの「ウインドウ」メニューにある macOS 標準の配置を AX で押す。
 /// 合成したショートカット (Fn+Ctrl+Shift+← など) は実機で効かなかったので、メニュー項目を直接押す。
 /// 標準のウインドウメニューを持たないアプリでは何もできない
 @MainActor
 @discardableResult
 func arrangeFrontmost(_ arrangement: Arrangement) -> Bool {
-  guard let frontmost = NSWorkspace.shared.frontmostApplication else {
-    log("\(arrangement) → 前面のアプリが無い")
+  guard let owner = targetApplication() else {
+    log("\(arrangement) → 相手のアプリが無い")
     return false
   }
-  let appName = frontmost.localizedName ?? "?"
-  let app = AXUIElementCreateApplication(frontmost.processIdentifier)
-  guard case .success(let menuBar) = element(app, kAXMenuBarAttribute) else {
-    log("\(arrangement) → \(appName) のメニューバーが読めない")
-    return false
-  }
-  // 項目の多いメニュー (履歴、ブックマーク) の奥まで探さないよう、まず「画面全体に表示」を
-  // 持つメニュー (= ウインドウメニュー) を見つけ、その中と 1 段下のサブメニューだけを探す
-  let menus = children(of: menuBar).flatMap { children(of: $0) }
-  guard
-    let windowMenu = menus.first(where: { Arrangement.fill.index(in: shortcuts(in: $0)) != nil })
-  else {
-    log("\(arrangement) → \(appName) に標準のウインドウメニューが無い")
+  let appName = owner.name
+  let app = AXUIElementCreateApplication(owner.pid)
+  guard let windowMenu = standardWindowMenu(of: app) else {
+    log("\(arrangement) → \(appName) に標準のウインドウメニューが見つからない")
     return false
   }
   let candidates = [windowMenu] + children(of: windowMenu).flatMap { children(of: $0) }
@@ -36,6 +27,14 @@ func arrangeFrontmost(_ arrangement: Arrangement) -> Bool {
   }
   log("\(arrangement) → \(appName) のウインドウメニューに該当する配置が無い")
   return false
+}
+
+/// 「画面全体に表示」を持つメニュー (= 標準のウインドウメニュー)。
+/// 項目の多いメニュー (履歴、ブックマーク) の奥までは探さない
+private func standardWindowMenu(of app: AXUIElement) -> AXUIElement? {
+  guard case .success(let menuBar) = element(app, kAXMenuBarAttribute) else { return nil }
+  let menus = children(of: menuBar).flatMap { children(of: $0) }
+  return menus.first { Arrangement.fill.index(in: shortcuts(in: $0)) != nil }
 }
 
 private func shortcuts(in menu: AXUIElement) -> [MenuShortcut?] {
