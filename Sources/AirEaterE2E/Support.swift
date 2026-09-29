@@ -108,12 +108,23 @@ func processes(owningWindowsNamed name: String) -> Set<pid_t> {
 /// 実際のキーボードと同じ HID の段にキー入力を送る。
 func press(_ keyCode: Int, _ flags: CGEventFlags) {
   let source = CGEventSource(stateID: .hidSystemState)
+  // 修飾キーの押下と解放も送る。送らないと HID の状態に Control が残り、次の E2E やユーザーの
+  // クリックが Ctrl+クリックになる (air-eater の post と同じ)
+  let modifiers = modifierKeyCodes(for: flags)
+  func flagsChanged(_ code: CGKeyCode, _ flags: CGEventFlags) {
+    let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: !flags.isEmpty)
+    event?.type = .flagsChanged
+    event?.flags = flags
+    event?.post(tap: .cghidEventTap)
+  }
+  for code in modifiers { flagsChanged(code, flags) }
   for keyDown in [true, false] {
     let event = CGEvent(
       keyboardEventSource: source, virtualKey: CGKeyCode(keyCode), keyDown: keyDown)
     event?.flags = flags
     event?.post(tap: .cghidEventTap)
   }
+  for code in modifiers.reversed() { flagsChanged(code, []) }
 }
 
 /// E2E プロセス自身のキー監視に、自分で送ったキーが見えるか。

@@ -18,3 +18,14 @@ public func keyStroke(switchingTo desktop: Int) -> KeyStroke? {
   guard digitKeyCodes.indices.contains(desktop - 1) else { return nil }
   return KeyStroke(keyCode: digitKeyCodes[desktop - 1], flags: .maskControl)
 }
+
+/// flags に含まれる修飾キーの仮想キーコード (Control、Option、Shift、Command の順)。
+/// 合成したキー入力では、キーの down / up に修飾のフラグを付けるだけでなく、修飾キー自体の
+/// 押下と解放 (flagsChanged) も送る。送らないとシステムの HID の状態に修飾キーが残る
+public func modifierKeyCodes(for flags: CGEventFlags) -> [CGKeyCode] {
+  let modifierKeys: [(CGEventFlags, Int)] = [
+    (.maskControl, kVK_Control), (.maskAlternate, kVK_Option), (.maskShift, kVK_Shift),
+    (.maskCommand, kVK_Command),
+  ]
+  return modifierKeys.filter { flags.contains($0.0) }.map { CGKeyCode($0.1) }
+}
