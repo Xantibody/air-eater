@@ -65,7 +65,11 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 | 今の workspace に端末を開く | Option+Return | kitty (無ければ Ghostty、Terminal) を新しいインスタンスで起動。窓が増えるので自動タイルが並べる |
 | 新しい workspace に端末を開く | Option+Shift+Return | 使われていない一番小さい番号の workspace を作り、そこで端末を起動 |
 | 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
+| 画面いっぱいに広げる (fullscreen の代わり) | Option+F | 可視領域いっぱいの frame を書き込む。ネイティブの全画面になっている窓なら、先に全画面を解いて元の Desktop に戻す |
+| フォーカス中の窓を閉じる | Option+C | 閉じるボタンを押す (Hyprland の killactive)。アプリは終了しない |
 | ウィンドウを別 workspace へ移動 | — | v1 では非対応 |
+
+ネイティブの全画面は使わない。全画面の窓は別の Space に入って workspace の外に出てしまい、戻る先の Space も公開 API では選べないため、Hyprland の fullscreen に当たる操作は「窓を画面いっぱいの大きさにする」に置き換えている。
 
 ホットキーは CGEventTap でプロセス内に持つ。skhd などの外部デーモンは要らない。`RegisterEventHotKey` (Carbon) は Option だけを修飾キーにすると実機で発火しなかったので使っていない。キー監視は手で押した Ctrl+数字 も見ているので、air-eater を通さずに切り替えた Desktop も番号が分かる (トラックパッドのスワイプは分からない)。
 
