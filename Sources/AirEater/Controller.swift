@@ -186,6 +186,10 @@ final class Controller {
     keyTap.onDesktopSwitchKey = { [weak self] desktop in
       log("Ctrl+\(desktop) を検知")
       self?.pendingSwitch = (desktop, .now)
+      // 手の Ctrl+N でも切り替えのアニメーションが始まる。通知を待たずに移動中として扱わないと、
+      // 通知より先に来た走査が移動先でない Desktop の窓を数えてしまう (実機で Desktop 3 の窓を
+      // Desktop 2 に数え、Desktop 3 の workspace が消えた)
+      self?.tracker.noteTransition()
     }
     return keyTap.start()
   }
