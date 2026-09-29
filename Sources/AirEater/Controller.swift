@@ -18,6 +18,8 @@ final class Controller {
   private var refreshTimer: Timer?
   /// 手で押された Ctrl+数字。直後に Space が変われば、そこがその番号の Desktop
   private var pendingSwitch: (desktop: Int, at: ContinuousClock.Instant)?
+  /// 最後に受け付けた操作。次の操作はこれが終わってから始める
+  private var lastCommand: Task<Void, Never>?
 
   init() {
     tracker = WindowTracker(workspaces: Workspaces(desktops: poolDesktops), markers: markers)
@@ -39,7 +41,7 @@ final class Controller {
     observeWindows()
     commandInput.onCommand = { [weak self] command in
       guard let self else { return }
-      Task { await self.perform(command) }
+      self.enqueue(command)
     }
     commandInput.onStatus = { [weak self] in
       guard let self else { return }
@@ -179,13 +181,23 @@ final class Controller {
     keyTap.onCommand = { [weak self] command in
       guard let self else { return }
       log("\(command) が押された")
-      Task { await self.perform(command) }
+      self.enqueue(command)
     }
     keyTap.onDesktopSwitchKey = { [weak self] desktop in
       log("Ctrl+\(desktop) を検知")
       self?.pendingSwitch = (desktop, .now)
     }
     return keyTap.start()
+  }
+
+  /// 操作を 1 つずつ順に実行する。前の操作が Desktop の切り替えを待っている間に次を始めると、
+  /// 切り替えの成否と workspace の割り当てが入り混じる (実機で連続して押したときに起きた)
+  private func enqueue(_ command: Command) {
+    let previous = lastCommand
+    lastCommand = Task {
+      await previous?.value
+      await perform(command)
+    }
   }
 
   private func perform(_ command: Command) async {
