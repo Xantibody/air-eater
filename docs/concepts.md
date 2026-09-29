@@ -15,7 +15,7 @@
 | 現在地 (current) | 今表示している Desktop。マーカーの無い Space (未訪問の Desktop、全画面) にいる間は nil で、そこの窓はどこにも数えない | `Workspaces.current`、`CurrentDesktop` |
 | 数える窓 (managed) | 通常レイヤーにあり、alpha が 0 でなく、自分と macOS のオーバーレイ (WindowManager) 以外の窓 | `ManagedWindows` |
 | 移動中 (settling) | Ctrl+N を送った、通知を受けた、手の Ctrl+N を見た、のいずれかから 600 ms。この間は移動元と移動先の窓が同時に写るので数えない | `WindowTracker` |
-| 命令 (Command) | Option+キー か標準入力の 1 行から読む操作。`workspace N`、`move N`、`neighbor`、`terminal`、`new`、`tile <side>`、`focus <direction>`、`arrange`、`close` | `KeyCommand` |
+| 命令 (Command) | Option+キー か標準入力の 1 行から読む操作。`workspace N`、`move N`、`neighbor`、`terminal`、`new`、`tile <side>`、`focus <direction>`、`arrange`、`close`、`previous` | `KeyCommand` |
 | 配置 (Arrangement) | 窓の数に合った純正の形。1 枚は全体、2 枚は左と右、3 枚は左と 4 分割、4 枚は 4 分割。5 枚以上は並べない | `Arrangement` |
 | Tile | Option+H/J/K/L/F で書く 1 枚の窓の frame。左右上下の半分と、可視領域いっぱい (fill) | `Tile` |
 | 向き (FocusDirection) | Option+Shift+H/J/K/L でフォーカスを移す向き。中心がその向きにあり一番近い窓を選ぶ | `FocusDirection` |
