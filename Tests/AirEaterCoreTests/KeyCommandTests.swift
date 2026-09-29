@@ -68,3 +68,17 @@ extension KeyCommandTests {
     #expect(command(keyCode: 0x00, flags: [.maskAlternate, .maskShift]) == nil)  // A
   }
 }
+
+extension KeyCommandTests {
+  // Option+Shift+H/J/K/L はフォーカスを移す (Hyprland の movefocus)。Option+H/J/K/L の半分割と向きを揃える
+  @Test(
+    arguments: [
+      (CGKeyCode(0x04), FocusDirection.left),  // H
+      (0x26, .down),  // J
+      (0x28, .up),  // K
+      (0x25, .right),  // L
+    ] as [(CGKeyCode, FocusDirection)])
+  func optionShiftHJKLMovesFocus(keyCode: CGKeyCode, direction: FocusDirection) {
+    #expect(command(keyCode: keyCode, flags: [.maskAlternate, .maskShift]) == .focus(direction))
+  }
+}

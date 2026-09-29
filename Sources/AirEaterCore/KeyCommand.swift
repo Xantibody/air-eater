@@ -16,6 +16,8 @@ public enum Command: Equatable, Sendable {
   case close
   /// フォーカス中の窓を workspace N へ移し、一緒に移る (Hyprland の movetoworkspace)
   case moveToWorkspace(Int)
+  /// 今の Desktop で、その向きにある窓にフォーカスを移す (Hyprland の movefocus)
+  case focus(FocusDirection)
 }
 
 /// 数字以外の Super+キー。hjkl は vim と同じ向き
@@ -33,7 +35,11 @@ private let namedCommands: [Int: Command] = [
 
 /// Super+Shift+キー。Hyprland でも Shift 付きは「別の場所へ」の操作に当てることが多い
 private let shiftedCommands: [Int: Command] = [
-  kVK_Return: .newWorkspace
+  kVK_Return: .newWorkspace,
+  kVK_ANSI_H: .focus(.left),
+  kVK_ANSI_J: .focus(.down),
+  kVK_ANSI_K: .focus(.up),
+  kVK_ANSI_L: .focus(.right),
 ]
 
 /// 押し分けに使う修飾キー。Caps Lock や fn など他のフラグは見ない
@@ -69,27 +75,37 @@ public func desktopSwitched(keyCode: CGKeyCode, flags: CGEventFlags) -> Int? {
 extension Command {
   /// テストや外部からの操作用に、1 行の文字列から操作を読む。
   /// 形は `workspace <N>` / `move <N>` / `neighbor previous|next` / `terminal` / `new` /
-  /// `tile <side>` / `arrange` / `close`
+  /// `tile <side>` / `focus <direction>` / `arrange` / `close`
   public init?(parsing line: String) {
     let words = line.split(separator: " ").map(String.init)
-    if words.count == 1, let command = singleWordCommands[words[0]] {
-      self = command
-      return
+    let command: Command? =
+      switch words.count {
+      case 1: singleWordCommands[words[0]]
+      case 2: Self.twoWordCommand(words[0], argument: words[1])
+      default: nil
+      }
+    guard let command else { return nil }
+    self = command
+  }
+
+  /// 引数を 1 つ取る命令。番号は 1 以上、向きと辺は enum の case 名で受ける
+  private static func twoWordCommand(_ head: String, argument: String) -> Command? {
+    switch head {
+    case "workspace": positive(argument).map(Command.workspace)
+    case "move": positive(argument).map(Command.moveToWorkspace)
+    case "neighbor": neighborCommands[argument]
+    case "tile": named(argument, in: Tile.allCases).map(Command.tile)
+    case "focus": named(argument, in: FocusDirection.allCases).map(Command.focus)
+    default: nil
     }
-    switch (words.first, words.dropFirst().first, words.count) {
-    case ("workspace", let number?, 2):
-      guard let number = Int(number), number >= 1 else { return nil }
-      self = .workspace(number)
-    case ("move", let number?, 2):
-      guard let number = Int(number), number >= 1 else { return nil }
-      self = .moveToWorkspace(number)
-    case ("neighbor", "previous", 2): self = .neighbor(.previous)
-    case ("neighbor", "next", 2): self = .neighbor(.next)
-    case ("tile", let side?, 2):
-      guard let tile = Tile.allCases.first(where: { "\($0)" == side }) else { return nil }
-      self = .tile(tile)
-    default: return nil
-    }
+  }
+
+  private static func positive(_ word: String) -> Int? {
+    Int(word).flatMap { $0 >= 1 ? $0 : nil }
+  }
+
+  private static func named<Case>(_ word: String, in cases: [Case]) -> Case? {
+    cases.first { "\($0)" == word }
   }
 }
 
@@ -99,4 +115,9 @@ private let singleWordCommands: [String: Command] = [
   "new": .newWorkspace,
   "arrange": .arrange,
   "close": .close,
+]
+
+private let neighborCommands: [String: Command] = [
+  "previous": .neighbor(.previous),
+  "next": .neighbor(.next),
 ]

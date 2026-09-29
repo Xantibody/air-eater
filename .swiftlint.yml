@@ -6,3 +6,7 @@ excluded:
 # 見た目は swift format に任せる。swift format は複数行の末尾にカンマを付けるので衝突する
 disabled_rules:
   - trailing_comma
+
+# 既定で許される id に加え、方向の up も自然な語なので 3 文字未満でも許す
+identifier_name:
+  excluded: [id, up]
