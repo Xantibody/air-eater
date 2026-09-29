@@ -6,6 +6,8 @@ public struct Workspaces: Sendable {
   public private(set) var pool: SpacePool
   /// workspace ID → 物理 Desktop
   private var assigned: [Int: Int] = [:]
+  /// 確保したが、まだ着いていない Desktop。向かう途中で「離れた空の workspace」として外さない
+  private var reserved: Set<Int> = []
 
   public init(desktops: some Sequence<Int>) {
     pool = SpacePool(desktops: desktops)
@@ -20,15 +22,17 @@ public struct Workspaces: Sendable {
     return pool.desktops.first { !taken.contains($0) && !pool.active.contains($0) }
   }
 
-  /// desktop を workspace id にする。
+  /// desktop を workspace id にする。着くまでは外さない。
   public mutating func assign(_ id: Int, to desktop: Int) {
     assigned[id] = desktop
+    reserved.insert(desktop)
   }
 
   /// id のために確保した Desktop に元から窓があったとき、id をそこから外す。
   /// その Desktop には自分の ID を付け直し、id は candidate で次の Desktop を引き直す
   public mutating func evict(_ id: Int) {
     guard let desktop = assigned.removeValue(forKey: id) else { return }
+    reserved.remove(desktop)
     if pool.active.contains(desktop) { adopt(desktop) }
   }
 
@@ -38,16 +42,26 @@ public struct Workspaces: Sendable {
     if !windows.isEmpty { adopt(desktop) }
   }
 
+  /// 表示していない Desktop で閉じられた窓を落とす。
+  public mutating func retain(existing: Set<CGWindowID>) {
+    pool.retain(existing: existing)
+  }
+
   /// 今表示している Desktop。マーカーの無い Space (全画面アプリなど) にいる間は nil
   public private(set) var current: Int?
 
   /// desktop (nil ならプール外の Space) を表示し始めた。
   /// 表示中の Desktop は空でも workspace にし、離れた空の workspace は割り当てを外す。
-  /// 外すのは空だと見て確かめた Desktop だけで、まだ中身を見ていない Desktop は残す
+  /// 外すのは空だと見て確かめた Desktop だけで、まだ中身を見ていない Desktop と
+  /// 向かっている途中の Desktop は残す
   public mutating func enter(_ desktop: Int?) {
     current = desktop
-    if let desktop { adopt(desktop) }
-    for (id, other) in assigned where other != desktop && pool.isObservedEmpty(other) {
+    if let desktop {
+      reserved.remove(desktop)
+      adopt(desktop)
+    }
+    for (id, other) in assigned
+    where other != desktop && !reserved.contains(other) && pool.isObservedEmpty(other) {
       assigned[id] = nil
     }
   }

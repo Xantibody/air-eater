@@ -174,3 +174,18 @@ extension WorkspacesLifecycleTests {
     #expect(workspaces.description == "1→D1 5→D2")
   }
 }
+
+extension WorkspacesLifecycleTests {
+  // 一度空だと確かめた Desktop 2 を workspace 5 に確保して向かう途中で、プール外に見えても外さない。
+  // 着いてから離れたときには、空なので外す
+  @Test func reservedWorkspaceSurvivesTheTripToAnEmptiedDesktop() {
+    var workspaces = Workspaces(desktops: 1...9)
+    workspaces.observe(desktop: 2, windows: [])
+    workspaces.assign(5, to: 2)
+    workspaces.enter(nil)
+    #expect(workspaces.workspace(on: 2) == 5)
+    workspaces.enter(2)
+    workspaces.enter(1)
+    #expect(workspaces.workspace(on: 2) == nil)
+  }
+}
