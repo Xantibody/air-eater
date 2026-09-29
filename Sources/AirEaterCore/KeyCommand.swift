@@ -40,3 +40,23 @@ public func desktopSwitched(keyCode: CGKeyCode, flags: CGEventFlags) -> Int? {
   else { return nil }
   return index + 1
 }
+
+extension Command {
+  /// テストや外部からの操作用に、1 行の文字列から操作を読む。
+  /// 形は `workspace <N>` / `neighbor previous|next` / `new` / `tile left|bottom|top|right`
+  public init?(parsing line: String) {
+    let words = line.split(separator: " ").map(String.init)
+    switch (words.first, words.dropFirst().first, words.count) {
+    case ("workspace", let number?, 2):
+      guard let number = Int(number), number >= 1 else { return nil }
+      self = .workspace(number)
+    case ("neighbor", "previous", 2): self = .neighbor(.previous)
+    case ("neighbor", "next", 2): self = .neighbor(.next)
+    case ("new", nil, 1): self = .newWorkspace
+    case ("tile", let side?, 2):
+      guard let tile = Tile.allCases.first(where: { "\($0)" == side }) else { return nil }
+      self = .tile(tile)
+    default: return nil
+    }
+  }
+}
