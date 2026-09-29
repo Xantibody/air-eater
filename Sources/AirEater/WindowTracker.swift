@@ -27,7 +27,11 @@ final class WindowTracker {
     let before = state
     let desktop = currentDesktop(markers: markers.ids, onScreen: onScreenIDs)
     let visible = managedWindows(in: onScreen, excludingProcess: getpid())
-    let settling = isSettling
+    let suspect = desktop.map { workspaces.pool.isSuspect(desktop: $0, windows: visible) } ?? false
+    if suspect {
+      log("Desktop \(desktop ?? 0) の観測に他の Desktop の窓が大量に混ざっているので数えない")
+    }
+    let settling = isSettling || suspect
     if let desktop, !settling {
       workspaces.observe(desktop: desktop, windows: visible)
       noteWindowCount(visible.count, on: desktop)

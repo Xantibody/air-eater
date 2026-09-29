@@ -9,9 +9,16 @@ func focusedWindow(for purpose: String) -> (window: AXUIElement, appName: String
     log("\(purpose) → 相手のアプリが無い")
     return nil
   }
-  switch element(AXUIElementCreateApplication(owner.pid), kAXFocusedWindowAttribute) {
+  let app = AXUIElementCreateApplication(owner.pid)
+  switch element(app, kAXFocusedWindowAttribute) {
   case .success(let window): return (window, owner.name)
   case .failure(let error):
+    // 窓を閉じた直後など、次の窓にフォーカスを渡さないアプリがある (kAXErrorNoValue)。
+    // そのときはメインの窓、それも無ければ一番手前の窓 (AX の窓の並びは手前から) を相手にする
+    if case .success(let main) = element(app, kAXMainWindowAttribute) { return (main, owner.name) }
+    if let front = attribute(app, kAXWindowsAttribute, as: [AXUIElement].self)?.first {
+      return (front, owner.name)
+    }
     log("\(purpose) → \(owner.name) のフォーカス中の窓が取れない (AXError \(error.code.rawValue))")
     return nil
   }
