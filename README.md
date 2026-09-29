@@ -68,6 +68,7 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 | 新しい workspace に端末を開く | Option+Shift+Return | 使われていない一番小さい番号の workspace を作り、そこで端末を起動 |
 | 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
 | 画面いっぱいに広げる (fullscreen の代わり) | Option+F | 可視領域いっぱいの frame を書き込む。ネイティブの全画面になっている窓なら、先に全画面を解いて元の Desktop に戻す |
+| 隣の窓にフォーカスを移す | Option+Shift+H/J/K/L | 今の Desktop の窓の位置から、その向きで中心が一番近い窓を選び、Accessibility API で手前に出す (Hyprland の movefocus)。端では折り返さない |
 | フォーカス中の窓を閉じる | Option+C | 閉じるボタンを押す (Hyprland の killactive)。アプリは終了しない |
 | フォーカス中の窓を workspace N へ移す | Option+Shift+1…9 | タイトルバーを掴んで数 px ドラッグした状態で Ctrl+数字 を送り、切り替わってから離す (Hyprland の movetoworkspace。窓と一緒に移る)。約 1.5 秒かかり、その間カーソルが動く。全画面と最小化の窓は移せない |
 
