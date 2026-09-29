@@ -25,6 +25,7 @@ private let namedCommands: [Int: Command] = [
   kVK_ANSI_J: .tile(.bottom),
   kVK_ANSI_K: .tile(.top),
   kVK_ANSI_L: .tile(.right),
+  kVK_ANSI_F: .tile(.fill),
   kVK_ANSI_C: .close,
 ]
 
