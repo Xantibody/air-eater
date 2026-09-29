@@ -8,31 +8,6 @@ import Foundation
 // 実際に Desktop を切り替えるので、手元で `just e2e` として回す。CI では回さない。
 // 前提: Desktop が 2 個以上あり、Ctrl+1…9 が有効で、実行する端末にアクセシビリティ権限がある
 
-/// air-eater の標準エラーを行ごとに貯める。
-final class LogLines: @unchecked Sendable {
-  private let lock = NSLock()
-  private var lines: [String] = []
-  private var partial = ""
-
-  func append(_ chunk: String) {
-    lock.withLock {
-      partial += chunk
-      while let newline = partial.firstIndex(of: "\n") {
-        let line = String(partial[..<newline])
-        partial = String(partial[partial.index(after: newline)...])
-        print("    | \(line)")
-        lines.append(line)
-      }
-    }
-  }
-
-  var count: Int { lock.withLock { lines.count } }
-
-  func lines(from index: Int) -> [String] {
-    lock.withLock { Array(lines[min(index, lines.count)...]) }
-  }
-}
-
 let logLines = LogLines()
 
 /// seconds の間、メインのランループを回して待つ。
@@ -113,14 +88,6 @@ func send(_ command: String) {
 }
 
 // MARK: - シナリオ
-
-struct Failure: Error, CustomStringConvertible {
-  let description: String
-}
-
-func expect(_ condition: Bool, _ message: String) throws {
-  if !condition { throw Failure(description: message) }
-}
 
 /// trigger の後に Desktop desktop に着き、その後 settle の間は他の Space へ動かないこと。
 func arrivesAndStays(
@@ -257,12 +224,6 @@ func tiles(_ tile: Tile) -> () throws -> Void {
   }
 }
 
-/// 座標の丸めで 1〜2 pt ずれることがあるので、それは同じとみなす
-func nearlyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
-  abs(lhs.minX - rhs.minX) <= 2 && abs(lhs.minY - rhs.minY) <= 2
-    && abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
-}
-
 scenarios += [
   ("E2E の窓を開いて前面に出す", showTileWindow),
   ("tile left で窓が左半分になる", tiles(.left)),
@@ -270,6 +231,71 @@ scenarios += [
   ("tile top で窓が上半分になる", tiles(.top)),
   ("tile right で窓が右半分になる", tiles(.right)),
   ("E2E の窓を閉じる", { MainActor.assumeIsolated { tileWindow.close() } }),
+]
+
+// MARK: - 自動タイル (macOS 標準の配置)
+
+// 標準の配置は各アプリの「ウインドウ」メニューにあり、E2E のようなコマンドラインのプロセスには
+// AppKit が項目を足さない。Finder の窓で確かめる。開くのは E2E が作った一時フォルダだけ
+
+/// Finder で開く一時フォルダ。名前が窓のタイトルになる
+let finderFolders: [URL] = (1...2).map { index in
+  let url = FileManager.default.temporaryDirectory
+    .appendingPathComponent("air-eater-e2e-\(ProcessInfo.processInfo.processIdentifier)-\(index)")
+  try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+  return url
+}
+
+/// index 番目の一時フォルダを Finder で開き、expected の各窓がその位置に並ぶこと。
+/// expected は (何番目のフォルダの窓か, 期待する位置 (nil なら画面全体)) の並び
+func opensAndArranges(folder index: Int, expected: [(Int, Tile?)]) -> () throws -> Void {
+  {
+    let start = logLines.count
+    NSWorkspace.shared.open(finderFolders[index])
+    try expect(
+      waitFor("窓が \(index + 1) 枚になった", from: start, timeout: .seconds(4)),
+      "Finder の窓が \(index + 1) 枚になったと air-eater が気づかなかった")
+    let deadline = Date(timeIntervalSinceNow: 3)
+    var mismatches: [String] = []
+    repeat {
+      pump(0.1)
+      mismatches = expected.compactMap { folder, tile in
+        let title = finderFolders[folder].lastPathComponent
+        let frame = finderWindow(titled: title).flatMap(axFrame(of:))
+        let want = expectedAXFrame(tile)
+        return frame.map { nearlyEqual($0, want) } == true
+          ? nil : "\(title): \(frame.map { "\($0)" } ?? "窓が無い") (期待 \(want))"
+      }
+    } while !mismatches.isEmpty && Date() < deadline
+    try expect(mismatches.isEmpty, "標準の配置で並ばなかった: \(mismatches)")
+  }
+}
+
+/// E2E が開いた Finder の窓を閉じる。
+func closeFinderWindows() {
+  for folder in finderFolders {
+    guard let window = finderWindow(titled: folder.lastPathComponent) else { continue }
+    var button: CFTypeRef?
+    AXUIElementCopyAttributeValue(window, kAXCloseButtonAttribute as CFString, &button)
+    if let button {
+      AXUIElementPerformAction(
+        unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
+    }
+  }
+  pump(1)
+  for folder in finderFolders { try? FileManager.default.removeItem(at: folder) }
+}
+
+scenarios += [
+  ("自動タイルを試すため空の Desktop 2 に workspace 2 を作る", workspace(2, reaches: 2)),
+  // 1 枚なら 画面全体に表示、2 枚なら 左と右 (前面の新しい窓が左)
+  ("Finder の窓 1 枚目は画面全体に広がる", opensAndArranges(folder: 0, expected: [(0, nil)])),
+  (
+    "Finder の窓 2 枚目で左と右に並ぶ",
+    opensAndArranges(folder: 1, expected: [(1, .left), (0, .right)])
+  ),
+  ("E2E が開いた Finder の窓を閉じる", { closeFinderWindows() }),
+  ("workspace 1 に戻る", workspace(1, reaches: 1)),
 ]
 
 // MARK: - 実行
