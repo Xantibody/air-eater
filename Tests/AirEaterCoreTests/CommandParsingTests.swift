@@ -26,12 +26,16 @@ extension CommandParsingTests {
       ("tile top", .tile(.top)),
       ("tile right", .tile(.right)),
       ("  workspace 3  ", .workspace(3)), ("arrange", .arrange),
+      ("move 2", .moveToWorkspace(2)),
     ] as [(String, Command)])
   func lineParsesToCommand(line: String, expected: Command) {
     #expect(Command(parsing: line) == expected)
   }
 
-  @Test(arguments: ["workspace", "workspace x", "workspace 0", "neighbor up", "tile middle", "fly"])
+  @Test(arguments: [
+    "workspace", "workspace x", "workspace 0", "neighbor up", "tile middle", "fly", "move",
+    "move 0",
+  ])
   func malformedLineIsNotACommand(line: String) {
     #expect(Command(parsing: line) == nil)
   }

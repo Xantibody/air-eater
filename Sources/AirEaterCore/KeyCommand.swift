@@ -14,6 +14,8 @@ public enum Command: Equatable, Sendable {
   case arrange
   /// フォーカス中の窓を閉じる (Hyprland の killactive)。アプリは終了しない
   case close
+  /// フォーカス中の窓を workspace N へ移し、一緒に移る (Hyprland の movetoworkspace)
+  case moveToWorkspace(Int)
 }
 
 /// 数字以外の Super+キー。hjkl は vim と同じ向き
@@ -46,6 +48,9 @@ public func command(keyCode: CGKeyCode, flags: CGEventFlags) -> Command? {
     }
     return namedCommands[Int(keyCode)]
   case [.maskAlternate, .maskShift]:
+    if let index = digitKeyCodes.firstIndex(of: keyCode) {
+      return .moveToWorkspace(index + 1)
+    }
     return shiftedCommands[Int(keyCode)]
   default:
     return nil
@@ -63,8 +68,8 @@ public func desktopSwitched(keyCode: CGKeyCode, flags: CGEventFlags) -> Int? {
 
 extension Command {
   /// テストや外部からの操作用に、1 行の文字列から操作を読む。
-  /// 形は `workspace <N>` / `neighbor previous|next` / `terminal` / `new` / `tile <side>` /
-  /// `arrange` / `close`
+  /// 形は `workspace <N>` / `move <N>` / `neighbor previous|next` / `terminal` / `new` /
+  /// `tile <side>` / `arrange` / `close`
   public init?(parsing line: String) {
     let words = line.split(separator: " ").map(String.init)
     if words.count == 1, let command = singleWordCommands[words[0]] {
@@ -75,6 +80,9 @@ extension Command {
     case ("workspace", let number?, 2):
       guard let number = Int(number), number >= 1 else { return nil }
       self = .workspace(number)
+    case ("move", let number?, 2):
+      guard let number = Int(number), number >= 1 else { return nil }
+      self = .moveToWorkspace(number)
     case ("neighbor", "previous", 2): self = .neighbor(.previous)
     case ("neighbor", "next", 2): self = .neighbor(.next)
     case ("tile", let side?, 2):

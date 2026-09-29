@@ -40,7 +40,7 @@ extension KeyCommandTests {
 
 extension KeyCommandTests {
   // Option+Cmd+1 などはアプリのショートカットなので横取りしない
-  @Test(arguments: [CGEventFlags.maskCommand, .maskControl, .maskShift])
+  @Test(arguments: [CGEventFlags.maskCommand, .maskControl])
   func optionCombinedWithAnotherModifierIsNotACommand(extra: CGEventFlags) {
     #expect(command(keyCode: 0x12, flags: [.maskAlternate, extra]) == nil)
   }
@@ -58,7 +58,13 @@ extension KeyCommandTests {
     #expect(command(keyCode: 0x24, flags: [.maskAlternate, .maskShift]) == .newWorkspace)
   }
 
+  // Option+Shift+数字 はフォーカス中の窓をその workspace へ移す (Hyprland の movetoworkspace)
+  @Test func optionShiftDigitMovesFocusedWindowToWorkspace() {
+    #expect(command(keyCode: 0x12, flags: [.maskAlternate, .maskShift]) == .moveToWorkspace(1))
+    #expect(command(keyCode: 0x19, flags: [.maskAlternate, .maskShift]) == .moveToWorkspace(9))
+  }
+
   @Test func optionShiftWithOtherKeysIsNotACommand() {
-    #expect(command(keyCode: 0x12, flags: [.maskAlternate, .maskShift]) == nil)
+    #expect(command(keyCode: 0x00, flags: [.maskAlternate, .maskShift]) == nil)  // A
   }
 }
