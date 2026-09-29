@@ -150,6 +150,25 @@ func workspace(_ number: Int, reaches desktop: Int) -> () throws -> Void {
   { try arrivesAndStays(at: desktop) { send("workspace \(number)") } }
 }
 
+/// status を送り、workspace の割り当てに expected (例 "5→D2") が含まれるか (included が false なら含まれないか)。
+func workspaces(include expected: String, _ included: Bool = true) -> () throws -> Void {
+  {
+    let start = logLines.count
+    send("status")
+    try expect(waitFor("状態 現在地", from: start, timeout: .seconds(1)), "status に答えなかった")
+    let line = logLines.lines(from: start).first { $0.contains("状態 現在地") } ?? ""
+    let workspaces = line.components(separatedBy: " / ").first { $0.hasPrefix("workspace ") } ?? ""
+    try expect(
+      workspaces.contains(expected) == included,
+      "workspace の割り当てが想定と違う (\(included ? "" : "not ")\(expected)): \(workspaces)")
+  }
+}
+
+/// neighbor を送ると Desktop desktop に着いて留まること。
+func neighbor(_ direction: String, reaches desktop: Int) -> () throws -> Void {
+  { try arrivesAndStays(at: desktop) { send("neighbor \(direction)") } }
+}
+
 /// 手で Ctrl+N を押したのと同じキーを送り、air-eater がその Desktop を N 番だと分かること。
 func manualSwitch(to desktop: Int) -> () throws -> Void {
   { try arrivesAndStays(at: desktop) { press(digit[desktop - 1], .maskControl) } }
@@ -171,11 +190,18 @@ if tapWorks {
 } else {
   print("… 送ったキーがキー監視に見えない環境なので、手の Ctrl+数字 のシナリオは飛ばす")
 }
+// Desktop 1 には窓があり workspace 1。Desktop 2 は空
 scenarios += [
-  ("空きを指す workspace 2 で Desktop 2 に着いて留まる", workspace(2, reaches: 2)),
+  ("まだ無い workspace 2 を空の Desktop 2 に作って留まる", workspace(2, reaches: 2)),
+  ("workspace 2 は Desktop 2 にある", workspaces(include: "2→D2")),
   ("workspace 1 で Desktop 1 に戻って留まる", workspace(1, reaches: 1)),
-  ("もう一度 workspace 2 で Desktop 2 に留まる", workspace(2, reaches: 2)),
-  ("workspace 1 で Desktop 1 に戻る", workspace(1, reaches: 1)),
+  ("空のまま離れた workspace 2 は消える", workspaces(include: "2→D2", false)),
+  // Hyprland と同じく番号は詰めない。workspace 5 は 5 のまま空き Desktop 2 に作る
+  ("workspace 5 を空の Desktop 2 に作って留まる", workspace(5, reaches: 2)),
+  ("workspace 5 は Desktop 2 にある", workspaces(include: "5→D2")),
+  ("workspace 5 から隣 (ID 順で折り返して workspace 1) へ行く", neighbor("next", reaches: 1)),
+  ("空のまま離れた workspace 5 は消える", workspaces(include: "5→D2", false)),
+  ("workspace 1 のまま留まる", workspace(1, reaches: 1)),
 ]
 
 // MARK: - 実行

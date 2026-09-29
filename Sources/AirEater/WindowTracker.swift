@@ -6,43 +6,61 @@ func windowList(_ option: CGWindowListOption) -> [[String: Any]] {
   CGWindowListCopyWindowInfo(option, kCGNullWindowID) as? [[String: Any]] ?? []
 }
 
-/// 今いる Desktop とそこに写っているウィンドウを観測して、SpacePool を最新に保つ。
+/// 今いる Desktop とそこに写っているウィンドウを観測して、Workspaces を最新に保つ。
 @MainActor
 final class WindowTracker {
-  private(set) var pool: SpacePool
-  private(set) var current: Int?
+  private(set) var workspaces: Workspaces
   private let markers: Markers
 
-  init(pool: SpacePool, markers: Markers) {
-    self.pool = pool
+  init(workspaces: Workspaces, markers: Markers) {
+    self.workspaces = workspaces
     self.markers = markers
   }
+
+  var current: Int? { workspaces.current }
 
   /// マーカーの無い Space (未訪問の Desktop、フルスクリーン) にいる間は current が nil になり、
   /// そこに写っている窓はどの Desktop にも数えない。
   func refresh() {
     let onScreen = windowList(.optionOnScreenOnly)
     let onScreenIDs = Set(onScreen.compactMap { $0[kCGWindowNumber as String] as? CGWindowID })
-    let before = (current, pool.description)
-    current = currentDesktop(markers: markers.ids, onScreen: onScreenIDs)
+    let before = state
+    let desktop = currentDesktop(markers: markers.ids, onScreen: onScreenIDs)
     let visible = managedWindows(in: onScreen, excludingProcess: getpid())
     let settling = isSettling
-    if let current, !settling {
-      pool.observe(desktop: current, windows: visible)
+    if let desktop, !settling {
+      workspaces.observe(desktop: desktop, windows: visible)
     }
-    pool.retain(existing: managedWindows(in: windowList(.optionAll), excludingProcess: getpid()))
+    workspaces.retain(
+      existing: managedWindows(in: windowList(.optionAll), excludingProcess: getpid()))
+    workspaces.enter(desktop)
 
-    let place = current.map { "Desktop \($0)" } ?? "不明 (マーカーの無い Space)"
+    let place = desktop.map { "Desktop \($0)" } ?? "不明 (マーカーの無い Space)"
     summary =
-      "現在地 \(place)\(settling ? " (移動中なので窓は数えない)" : "") / プール \(pool.description)"
+      "現在地 \(place)\(settling ? " (移動中なので窓は数えない)" : "")"
+      + " / workspace \(workspaces) / 窓 \(workspaces.pool)"
       + " / 見えている窓 \(names(of: visible, in: onScreen))"
     // 1 秒ごとに呼ばれるので、変わったときだけ出す
-    guard before != (current, pool.description) else { return }
+    guard before != state else { return }
     log(summary)
   }
 
-  /// 最後に refresh したときの現在地・プール・見えている窓。
+  /// 最後に refresh したときの現在地・workspace・見えている窓。
   private(set) var summary = ""
+
+  private var state: String {
+    "\(current.map(String.init) ?? "-") \(workspaces) \(workspaces.pool)"
+  }
+
+  /// desktop を workspace id として確保する。
+  func assign(_ id: Int, to desktop: Int) {
+    workspaces.assign(id, to: desktop)
+  }
+
+  /// 確保した Desktop に元から窓があったので、id をそこから外す。
+  func evict(_ id: Int) {
+    workspaces.evict(id)
+  }
 
   // MARK: - 移動中の扱い
 

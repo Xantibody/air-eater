@@ -8,7 +8,7 @@ private let poolDesktops = 1...9
 /// 手で押した Ctrl+数字 と Space の変化を結び付ける猶予。切り替えアニメーションより長く取る
 private let manualSwitchWindow: Duration = .milliseconds(1500)
 
-/// Option+キー を受けて、SpacePool を引いて Space を切り替える。
+/// Option+キー を受けて、Workspaces を引いて Space を切り替える。
 @MainActor
 final class Controller {
   private let keyTap = KeyTap()
@@ -20,7 +20,7 @@ final class Controller {
   private var pendingSwitch: (desktop: Int, at: ContinuousClock.Instant)?
 
   init() {
-    tracker = WindowTracker(pool: SpacePool(desktops: poolDesktops), markers: markers)
+    tracker = WindowTracker(workspaces: Workspaces(desktops: poolDesktops), markers: markers)
   }
 
   func start() async {
@@ -103,44 +103,47 @@ final class Controller {
 
   // MARK: - 操作
 
-  private func goToWorkspace(_ workspace: Int) async {
-    let active = tracker.pool.active
-    guard let target = tracker.pool.desktop(forWorkspace: workspace) else {
-      log("workspace \(workspace) → 行き先なし (active=\(active))")
-      return
-    }
-    let kind = workspace <= active.count ? "" : " (workspace 数を超えたので空き候補)"
-    log("workspace \(workspace) → Desktop \(target)\(kind) (active=\(active))")
-    await go(to: target)
-  }
-
-  private func goToNeighbor(_ direction: SpacePool.Direction) async {
-    guard let current = tracker.current else {
-      log("\(direction) → 現在地が不明なので移動しない")
-      return
-    }
-    guard let target = tracker.pool.desktop(nextTo: current, direction: direction) else {
-      log("\(direction) → Desktop \(current) の先に workspace なし (active=\(tracker.pool.active))")
-      return
-    }
-    log("\(direction) → Desktop \(current) から Desktop \(target) へ")
-    await go(to: target)
-  }
-
-  /// 空き候補の Desktop へ行き、空だったら端末を開く。
-  /// まだ訪れていない Desktop も空き候補に入るので、着いて窓があれば次の候補へ進む
-  private func openNewWorkspace() async {
-    tracker.refresh()
-    while let target = tracker.pool.firstEmpty {
-      log("新しい workspace → 空き候補 Desktop \(target)")
-      guard await go(to: target) else { return }
-      if !tracker.pool.active.contains(target) {
-        await launchTerminal()
-        return
+  /// workspace id へ行く。まだ無ければ空き Desktop に作る (Hyprland の `workspace N`)。
+  /// 着いたら true。
+  @discardableResult
+  private func goToWorkspace(_ id: Int) async -> Bool {
+    while let target = tracker.workspaces.candidate(for: id) {
+      let exists = tracker.workspaces.workspace(on: target) == id
+      if exists {
+        log("workspace \(id) → Desktop \(target) (\(tracker.workspaces))")
+        return await go(to: target)
       }
-      log("Desktop \(target) には窓があったので次の候補へ")
+      log("workspace \(id) を空き候補の Desktop \(target) に作る (\(tracker.workspaces))")
+      tracker.assign(id, to: target)
+      guard await go(to: target) else {
+        tracker.evict(id)
+        return false
+      }
+      // まだ訪れていなかった Desktop には、元から窓があることがある
+      guard tracker.workspaces.pool.active.contains(target) else { return true }
+      log("Desktop \(target) には元から窓があったので、workspace \(id) は次の候補へ")
+      tracker.evict(id)
     }
-    log("空いている Desktop がありません")
+    log("workspace \(id) を作れる空き Desktop がありません (\(tracker.workspaces))")
+    return false
+  }
+
+  /// ID 順で隣の workspace へ行く。端では折り返す (Hyprland の `workspace e±1`)。
+  private func goToNeighbor(_ direction: SpacePool.Direction) async {
+    guard let target = tracker.workspaces.desktop(nextTo: direction) else {
+      log("\(direction) → 現在地が workspace でないので移動しない")
+      return
+    }
+    log("\(direction) → Desktop \(target) へ (\(tracker.workspaces))")
+    await go(to: target)
+  }
+
+  /// 使われていない一番小さい ID の workspace を作り、そこで端末を開く。
+  private func openNewWorkspace() async {
+    let id = tracker.workspaces.lowestFreeID
+    log("新しい workspace \(id) を作る")
+    guard await goToWorkspace(id) else { return }
+    await launchTerminal()
   }
 
   /// desktop へ切り替え、初めて来た Desktop ならマーカーを置く。着けなければ false。
