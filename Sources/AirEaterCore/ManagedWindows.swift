@@ -50,3 +50,28 @@ private func isManaged(_ info: [String: Any], excludingProcess ownPID: pid_t) ->
   return info[kCGWindowLayer as String] as? Int == 0
     && (info[kCGWindowAlpha as String] as? Double ?? 0) > 0
 }
+
+/// 画面に写っている通常の窓 1 つ分。bounds は CGWindowList の座標 (左上原点、AX と同じ)
+public struct WindowEntry: Equatable, Sendable {
+  public let id: CGWindowID
+  public let pid: pid_t
+  public let bounds: CGRect
+}
+
+/// 画面に写っている窓の一覧 (手前から順) から、占有に数える窓を順番を保って選ぶ。
+/// 自前の frame で並べるときに、手前の窓から順に置き場所を割り当てるのに使う
+public func managedWindowEntries(
+  in windowList: [[String: Any]], excludingProcess ownPID: pid_t
+) -> [WindowEntry] {
+  windowList.compactMap { info in
+    guard isManaged(info, excludingProcess: ownPID),
+      let id = info[kCGWindowNumber as String] as? CGWindowID,
+      let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+      let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
+      let left = bounds["X"], let top = bounds["Y"], let width = bounds["Width"],
+      let height = bounds["Height"]
+    else { return nil }
+    return WindowEntry(
+      id: id, pid: pid, bounds: CGRect(x: left, y: top, width: width, height: height))
+  }
+}
