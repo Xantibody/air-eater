@@ -4,20 +4,7 @@ import AppKit
 /// 最前面のアプリのフォーカス中ウィンドウを、そのウィンドウがある画面の tile に寄せる。
 @MainActor
 func tileFocusedWindow(_ tile: Tile) {
-  // 相手のアプリの決め方は targetApplication を参照
-  guard let owner = targetApplication() else {
-    log("\(tile) → 相手のアプリが無い")
-    return
-  }
-  let appName = owner.name
-  let app = AXUIElementCreateApplication(owner.pid)
-  let window: AXUIElement
-  switch element(app, kAXFocusedWindowAttribute) {
-  case .success(let focused): window = focused
-  case .failure(let error):
-    log("\(tile) → \(appName) のフォーカス中の窓が取れない (AXError \(error.code.rawValue))")
-    return
-  }
+  guard let (window, appName) = focusedWindow(for: "\(tile)") else { return }
   guard let primary = NSScreen.screens.first else { return }
 
   let screen = screen(containing: window, primaryHeight: primary.frame.height) ?? primary
