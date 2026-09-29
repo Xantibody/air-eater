@@ -1,3 +1,5 @@
+import CoreGraphics
+
 /// 窓の数に合わせて使う、macOS 標準の配置 (ウインドウ ▸ 移動とサイズ変更)。
 /// 自前で frame を計算せず、各アプリのメニューにある標準の機能を押す。
 public enum Arrangement: Equatable, Sendable {
@@ -57,3 +59,23 @@ extension Arrangement {
 
 private let kLeftArrow = 123
 private let kDownArrow = 125
+
+extension Arrangement {
+  /// 純正の配置と同じ形を自前の frame で再現する。標準のウインドウメニューを持たないアプリ
+  /// (Electron、Qt、コマンドラインのプロセス) の窓を並べるときだけ使う。
+  /// 並びは手前の窓から順で、visible は Cocoa 座標 (左下原点)。左と右なら手前の窓が左
+  public func frames(in visible: CGRect) -> [CGRect] {
+    let left = Tile.left.frame(in: visible)
+    let right = Tile.right.frame(in: visible)
+    switch self {
+    case .fill: return [visible]
+    case .leftAndRight: return [left, right]
+    case .leftAndQuarters: return [left, Tile.top.frame(in: right), Tile.bottom.frame(in: right)]
+    case .quarters:
+      return [
+        Tile.top.frame(in: left), Tile.top.frame(in: right),
+        Tile.bottom.frame(in: left), Tile.bottom.frame(in: right),
+      ]
+    }
+  }
+}
