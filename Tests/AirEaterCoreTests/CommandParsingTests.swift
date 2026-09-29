@@ -21,6 +21,7 @@ extension CommandParsingTests {
       ("neighbor previous", .neighbor(.previous)),
       ("neighbor next", .neighbor(.next)),
       ("new", .newWorkspace), ("terminal", .openTerminal), ("close", .close),
+      ("previous", .previousWorkspace),
       ("tile left", .tile(.left)),
       ("tile bottom", .tile(.bottom)),
       ("tile top", .tile(.top)),

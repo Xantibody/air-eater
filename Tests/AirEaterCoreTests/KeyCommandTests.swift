@@ -28,13 +28,15 @@ extension KeyCommandTests {
       (0x25, .tile(.right)),  // L
       (0x08, .close),  // C
       (0x03, .tile(.fill)),  // F
+      (0x30, .previousWorkspace),  // Tab
+      (0x00, .arrange),  // A
     ] as [(CGKeyCode, Command)])
   func optionKeyMapsToCommand(keyCode: CGKeyCode, expected: Command) {
     #expect(command(keyCode: keyCode, flags: .maskAlternate) == expected)
   }
 
   @Test func unboundKeyWithOptionIsNotACommand() {
-    #expect(command(keyCode: 0x00, flags: .maskAlternate) == nil)  // A
+    #expect(command(keyCode: 0x0B, flags: .maskAlternate) == nil)  // B
   }
 }
 

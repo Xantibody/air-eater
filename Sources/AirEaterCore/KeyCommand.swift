@@ -18,6 +18,8 @@ public enum Command: Equatable, Sendable {
   case moveToWorkspace(Int)
   /// 今の Desktop で、その向きにある窓にフォーカスを移す (Hyprland の movefocus)
   case focus(FocusDirection)
+  /// 直前にいた workspace へ戻る (Hyprland の workspace previous)。消えていれば作り直す
+  case previousWorkspace
 }
 
 /// 数字以外の Super+キー。hjkl は vim と同じ向き
@@ -31,6 +33,8 @@ private let namedCommands: [Int: Command] = [
   kVK_ANSI_L: .tile(.right),
   kVK_ANSI_F: .tile(.fill),
   kVK_ANSI_C: .close,
+  kVK_Tab: .previousWorkspace,
+  kVK_ANSI_A: .arrange,
 ]
 
 /// Super+Shift+キー。Hyprland でも Shift 付きは「別の場所へ」の操作に当てることが多い
@@ -75,7 +79,7 @@ public func desktopSwitched(keyCode: CGKeyCode, flags: CGEventFlags) -> Int? {
 extension Command {
   /// テストや外部からの操作用に、1 行の文字列から操作を読む。
   /// 形は `workspace <N>` / `move <N>` / `neighbor previous|next` / `terminal` / `new` /
-  /// `tile <side>` / `focus <direction>` / `arrange` / `close`
+  /// `tile <side>` / `focus <direction>` / `arrange` / `close` / `previous`
   public init?(parsing line: String) {
     let words = line.split(separator: " ").map(String.init)
     let command: Command? =
@@ -115,6 +119,7 @@ private let singleWordCommands: [String: Command] = [
   "new": .newWorkspace,
   "arrange": .arrange,
   "close": .close,
+  "previous": .previousWorkspace,
 ]
 
 private let neighborCommands: [String: Command] = [

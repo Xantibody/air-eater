@@ -70,11 +70,25 @@ public struct Workspaces: Sendable {
     if let desktop {
       reserved.remove(desktop)
       adopt(desktop)
+      rememberPrevious(leavingFor: workspace(on: desktop))
     }
     for (id, other) in assigned
     where other != desktop && !reserved.contains(other) && pool.isObservedEmpty(other) {
       assigned[id] = nil
     }
+  }
+
+  /// 直前にいた workspace の ID (Hyprland の workspace previous)。
+  /// ID で覚えるので、空になって消えた workspace にも戻れる (戻れば作り直される)
+  public private(set) var previousID: Int?
+  private var lastID: Int?
+
+  /// 同じ Desktop の観測は繰り返されるので、ID が変わったときだけ入れ替える。
+  /// マーカーの無い Space を通っても直前の workspace は変えない
+  private mutating func rememberPrevious(leavingFor id: Int?) {
+    guard let id, id != lastID else { return }
+    previousID = lastID
+    lastID = id
   }
 
   /// desktop に割り当てている workspace ID。
