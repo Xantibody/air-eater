@@ -27,45 +27,6 @@ func waitFor(_ contains: String, from index: Int, timeout: Duration = .seconds(3
   return false
 }
 
-/// 実際のキーボードと同じ HID の段にキー入力を送る。
-func press(_ keyCode: Int, _ flags: CGEventFlags) {
-  let source = CGEventSource(stateID: .hidSystemState)
-  for keyDown in [true, false] {
-    let event = CGEvent(
-      keyboardEventSource: source, virtualKey: CGKeyCode(keyCode), keyDown: keyDown)
-    event?.flags = flags
-    event?.post(tap: .cghidEventTap)
-  }
-}
-
-/// E2E プロセス自身のキー監視に、自分で送ったキーが見えるか。
-/// 見えない環境 (このプロセスの起動元によっては見えない) では、キーを使うシナリオを飛ばす
-func tapSeesSyntheticKeys() -> Bool {
-  final class Seen: @unchecked Sendable { var count = 0 }
-  let seen = Seen()
-  guard
-    let tap = CGEvent.tapCreate(
-      tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .listenOnly,
-      eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
-      callback: { _, _, event, userInfo in
-        Unmanaged<Seen>.fromOpaque(userInfo!).takeUnretainedValue().count += 1
-        return Unmanaged.passUnretained(event)
-      },
-      userInfo: Unmanaged.passUnretained(seen).toOpaque())
-  else { return false }
-  let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
-  CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .defaultMode)
-  defer { CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .defaultMode) }
-  press(kVK_F19, [])  // どのアプリも使っていないキー
-  CFRunLoopRunInMode(.defaultMode, 0.5, false)
-  return seen.count > 0
-}
-
-let digit = [
-  kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8,
-  kVK_ANSI_9,
-]
-
 // MARK: - air-eater の起動
 
 let binary = CommandLine.arguments.dropFirst().first ?? ".build/out/Products/Debug/air-eater"
@@ -271,6 +232,27 @@ func opensAndArranges(folder index: Int, expected: [(Int, Tile?)]) -> () throws 
   }
 }
 
+/// close を送ると、手前にある 2 枚目の Finder の窓が閉じ、残った 1 枚目が画面全体に広がること。
+func closesFrontFinderWindow() throws {
+  let start = logLines.count
+  send("close")
+  try expect(waitFor("close → Finder の窓の閉じるボタンを押した", from: start), "close が Finder の窓を閉じなかった")
+  try expect(
+    waitFor("窓が 1 枚になった", from: start, timeout: .seconds(4)),
+    "閉じた後に窓が 1 枚になったと air-eater が気づかなかった")
+  let deadline = Date(timeIntervalSinceNow: 3)
+  var frame: CGRect?
+  repeat {
+    pump(0.1)
+    frame = finderWindow(titled: finderFolders[0].lastPathComponent).flatMap(axFrame(of:))
+  } while !(frame.map { nearlyEqual($0, expectedAXFrame(nil)) } ?? false) && Date() < deadline
+  try expect(
+    finderWindow(titled: finderFolders[1].lastPathComponent) == nil, "2 枚目の窓が閉じていない")
+  try expect(
+    frame.map { nearlyEqual($0, expectedAXFrame(nil)) } == true,
+    "残った窓が画面全体に広がらなかった: \(frame.map { "\($0)" } ?? "窓が無い")")
+}
+
 /// E2E が開いた Finder の窓を閉じる。
 func closeFinderWindows() {
   for folder in finderFolders {
@@ -288,12 +270,14 @@ func closeFinderWindows() {
 
 scenarios += [
   ("自動タイルを試すため空の Desktop 2 に workspace 2 を作る", workspace(2, reaches: 2)),
-  // 1 枚なら 画面全体に表示、2 枚なら 左と右 (前面の新しい窓が左)
+  // 1 枚なら 画面全体に表示、2 枚なら 左と右 (前面の新しい窓が左)。
+  // close (Option+C) で手前の 2 枚目を閉じると 1 枚に戻り、自動タイルが画面全体に広げる
   ("Finder の窓 1 枚目は画面全体に広がる", opensAndArranges(folder: 0, expected: [(0, nil)])),
   (
     "Finder の窓 2 枚目で左と右に並ぶ",
     opensAndArranges(folder: 1, expected: [(1, .left), (0, .right)])
   ),
+  ("close で手前の Finder の窓が閉じ、残りが画面全体に広がる", closesFrontFinderWindow),
   ("E2E が開いた Finder の窓を閉じる", { closeFinderWindows() }),
   ("workspace 1 に戻る", workspace(1, reaches: 1)),
 ]

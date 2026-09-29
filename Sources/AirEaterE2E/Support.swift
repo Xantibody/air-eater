@@ -1,6 +1,7 @@
 import AirEaterCore
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 import Foundation
 
 // E2E の部品のうち、main.swift のグローバル (起動した air-eater やシナリオの状態) に頼らないもの
@@ -103,3 +104,42 @@ func processes(owningWindowsNamed name: String) -> Set<pid_t> {
         ? info[kCGWindowOwnerPID as String] as? pid_t : nil
     })
 }
+
+/// 実際のキーボードと同じ HID の段にキー入力を送る。
+func press(_ keyCode: Int, _ flags: CGEventFlags) {
+  let source = CGEventSource(stateID: .hidSystemState)
+  for keyDown in [true, false] {
+    let event = CGEvent(
+      keyboardEventSource: source, virtualKey: CGKeyCode(keyCode), keyDown: keyDown)
+    event?.flags = flags
+    event?.post(tap: .cghidEventTap)
+  }
+}
+
+/// E2E プロセス自身のキー監視に、自分で送ったキーが見えるか。
+/// 見えない環境 (このプロセスの起動元によっては見えない) では、キーを使うシナリオを飛ばす
+func tapSeesSyntheticKeys() -> Bool {
+  final class Seen: @unchecked Sendable { var count = 0 }
+  let seen = Seen()
+  guard
+    let tap = CGEvent.tapCreate(
+      tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .listenOnly,
+      eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+      callback: { _, _, event, userInfo in
+        Unmanaged<Seen>.fromOpaque(userInfo!).takeUnretainedValue().count += 1
+        return Unmanaged.passUnretained(event)
+      },
+      userInfo: Unmanaged.passUnretained(seen).toOpaque())
+  else { return false }
+  let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
+  CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .defaultMode)
+  defer { CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .defaultMode) }
+  press(kVK_F19, [])  // どのアプリも使っていないキー
+  CFRunLoopRunInMode(.defaultMode, 0.5, false)
+  return seen.count > 0
+}
+
+let digit = [
+  kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8,
+  kVK_ANSI_9,
+]
