@@ -62,7 +62,8 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 | --- | --- | --- |
 | workspace N へ移動 | Option+1…9 | N の workspace がある Desktop の Ctrl+数字 を送出。無ければ空き Desktop に作る |
 | 隣の workspace へ移動 | Option+[ / ] | 番号順で隣の workspace へ。端では反対の端へ折り返す |
-| 新しい workspace で端末を起動 | Option+Return | 使われていない一番小さい番号の workspace を作り、Ghostty (無ければ Terminal) を新しいインスタンスで起動 |
+| 今の workspace に端末を開く | Option+Return | kitty (無ければ Ghostty、Terminal) を新しいインスタンスで起動。窓が増えるので自動タイルが並べる |
+| 新しい workspace に端末を開く | Option+Shift+Return | 使われていない一番小さい番号の workspace を作り、そこで端末を起動 |
 | 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
 | ウィンドウを別 workspace へ移動 | — | v1 では非対応 |
 
