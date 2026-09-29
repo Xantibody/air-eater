@@ -189,3 +189,15 @@ extension WorkspacesLifecycleTests {
     #expect(workspaces.workspace(on: 2) == nil)
   }
 }
+
+extension WorkspacesCandidateTests {
+  // 実機で、Desktop が 3 つしかないのに Desktop 4 を候補にして毎回 1.5 秒待って失敗していた
+  @Test func candidateIsLimitedToExistingDesktops() {
+    var workspaces = Workspaces(desktops: 1...9)
+    workspaces.observe(desktop: 1, windows: [10])
+    workspaces.observe(desktop: 2, windows: [20])
+    workspaces.observe(desktop: 3, windows: [30])
+    workspaces.limitToExistingDesktops(3)
+    #expect(workspaces.candidate(for: 4) == nil)
+  }
+}

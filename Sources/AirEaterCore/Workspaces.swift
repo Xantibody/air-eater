@@ -19,7 +19,18 @@ public struct Workspaces: Sendable {
   public func candidate(for id: Int) -> Int? {
     if let desktop = assigned[id] { return desktop }
     let taken = Set(assigned.values)
-    return pool.desktops.first { !taken.contains($0) && !pool.active.contains($0) }
+    return pool.desktops.first { desktop in
+      desktop <= (existingDesktops ?? .max) && !taken.contains(desktop)
+        && !pool.active.contains(desktop)
+    }
+  }
+
+  /// 実在する Desktop の数。分からなければ nil で、プールの全部を候補にする
+  private var existingDesktops: Int?
+
+  /// 実在する Desktop が count 個だと分かった。それより大きい番号は候補にしない
+  public mutating func limitToExistingDesktops(_ count: Int?) {
+    existingDesktops = count
   }
 
   /// desktop を workspace id にする。着くまでは外さない。
