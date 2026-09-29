@@ -192,6 +192,9 @@ final class Controller {
     switch command {
     case .workspace(let workspace): await goToWorkspace(workspace)
     case .neighbor(let direction): await goToNeighbor(direction)
+    case .openTerminal:
+      log("今の workspace に端末を開く")
+      await launchTerminal()
     case .newWorkspace: await openNewWorkspace()
     case .tile(let tile): tileFocusedWindow(tile)
     case .arrange: arrangeCurrentWorkspace()

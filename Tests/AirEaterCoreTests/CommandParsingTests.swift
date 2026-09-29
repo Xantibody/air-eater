@@ -20,7 +20,7 @@ extension CommandParsingTests {
       ("workspace 9", Command.workspace(9)),
       ("neighbor previous", .neighbor(.previous)),
       ("neighbor next", .neighbor(.next)),
-      ("new", .newWorkspace),
+      ("new", .newWorkspace), ("terminal", .openTerminal),
       ("tile left", .tile(.left)),
       ("tile bottom", .tile(.bottom)),
       ("tile top", .tile(.top)),

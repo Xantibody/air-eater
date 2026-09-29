@@ -21,7 +21,7 @@ extension KeyCommandTests {
       (CGKeyCode(0x19), Command.workspace(9)),
       (0x21, .neighbor(.previous)),  // [
       (0x1E, .neighbor(.next)),  // ]
-      (0x24, .newWorkspace),  // Return
+      (0x24, .openTerminal),  // Return
       (0x04, .tile(.left)),  // H
       (0x26, .tile(.bottom)),  // J
       (0x28, .tile(.top)),  // K
@@ -47,5 +47,16 @@ extension KeyCommandTests {
   @Test func nonModifierFlagsAreIgnored() {
     let flags: CGEventFlags = [.maskAlternate, .maskNonCoalesced, .maskAlphaShift]
     #expect(command(keyCode: 0x12, flags: flags) == .workspace(1))
+  }
+}
+
+extension KeyCommandTests {
+  // Option+Shift+Return だけは Shift 付きで、新しい workspace に端末を開く
+  @Test func optionShiftReturnOpensTerminalInNewWorkspace() {
+    #expect(command(keyCode: 0x24, flags: [.maskAlternate, .maskShift]) == .newWorkspace)
+  }
+
+  @Test func optionShiftWithOtherKeysIsNotACommand() {
+    #expect(command(keyCode: 0x12, flags: [.maskAlternate, .maskShift]) == nil)
   }
 }

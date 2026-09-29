@@ -5,6 +5,9 @@ import CoreGraphics
 public enum Command: Equatable, Sendable {
   case workspace(Int)
   case neighbor(SpacePool.Direction)
+  /// 今の workspace に端末を開く。窓が増えるので自動タイルが並べる
+  case openTerminal
+  /// 新しい workspace を作り、そこに端末を開く
   case newWorkspace
   case tile(Tile)
   /// 今の workspace の窓を、数に合った macOS 標準の配置で並べ直す
@@ -15,11 +18,16 @@ public enum Command: Equatable, Sendable {
 private let namedCommands: [Int: Command] = [
   kVK_ANSI_LeftBracket: .neighbor(.previous),
   kVK_ANSI_RightBracket: .neighbor(.next),
-  kVK_Return: .newWorkspace,
+  kVK_Return: .openTerminal,
   kVK_ANSI_H: .tile(.left),
   kVK_ANSI_J: .tile(.bottom),
   kVK_ANSI_K: .tile(.top),
   kVK_ANSI_L: .tile(.right),
+]
+
+/// Super+Shift+キー。Hyprland でも Shift 付きは「別の場所へ」の操作に当てることが多い
+private let shiftedCommands: [Int: Command] = [
+  kVK_Return: .newWorkspace
 ]
 
 /// 押し分けに使う修飾キー。Caps Lock や fn など他のフラグは見ない
@@ -27,11 +35,17 @@ private let modifiers: CGEventFlags = [.maskAlternate, .maskCommand, .maskContro
 
 /// キー入力が air-eater の操作に当たるなら、その操作を返す。
 public func command(keyCode: CGKeyCode, flags: CGEventFlags) -> Command? {
-  guard flags.intersection(modifiers) == .maskAlternate else { return nil }
-  if let index = digitKeyCodes.firstIndex(of: keyCode) {
-    return .workspace(index + 1)
+  switch flags.intersection(modifiers) {
+  case .maskAlternate:
+    if let index = digitKeyCodes.firstIndex(of: keyCode) {
+      return .workspace(index + 1)
+    }
+    return namedCommands[Int(keyCode)]
+  case [.maskAlternate, .maskShift]:
+    return shiftedCommands[Int(keyCode)]
+  default:
+    return nil
   }
-  return namedCommands[Int(keyCode)]
 }
 
 /// キー入力が Mission Control の「デスクトップ N へ切り替え」(Ctrl+N) なら N を返す。
@@ -45,7 +59,7 @@ public func desktopSwitched(keyCode: CGKeyCode, flags: CGEventFlags) -> Int? {
 
 extension Command {
   /// テストや外部からの操作用に、1 行の文字列から操作を読む。
-  /// 形は `workspace <N>` / `neighbor previous|next` / `new` / `tile left|bottom|top|right` /
+  /// 形は `workspace <N>` / `neighbor previous|next` / `terminal` / `new` / `tile <side>` /
   /// `arrange`
   public init?(parsing line: String) {
     let words = line.split(separator: " ").map(String.init)
@@ -55,6 +69,7 @@ extension Command {
       self = .workspace(number)
     case ("neighbor", "previous", 2): self = .neighbor(.previous)
     case ("neighbor", "next", 2): self = .neighbor(.next)
+    case ("terminal", nil, 1): self = .openTerminal
     case ("new", nil, 1): self = .newWorkspace
     case ("arrange", nil, 1): self = .arrange
     case ("tile", let side?, 2):
