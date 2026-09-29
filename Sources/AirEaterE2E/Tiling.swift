@@ -6,10 +6,7 @@ import Foundation
 
 /// 動かされる側の窓。ユーザーの窓には触らないよう、E2E 自身が開く
 @MainActor let tileWindow: NSWindow = {
-  NSApplication.shared.setActivationPolicy(.regular)
-  // これを呼ばないと AppKit のアクセシビリティが立ち上がらず、air-eater からの AX の問い合わせに
-  // 答えられない (kAXErrorCannotComplete になる)
-  NSApplication.shared.finishLaunching()
+  _ = ownAppReady
   let window = NSWindow(
     contentRect: NSRect(x: 200, y: 200, width: 400, height: 300),
     styleMask: [.titled, .resizable], backing: .buffered, defer: false)
@@ -76,56 +73,6 @@ func fillsFromFullscreen() throws {
   }
 }
 
-// MARK: - 純正の配置が無いアプリの自前の frame
-
-/// 純正の配置が無いアプリの代表として、E2E 自身の窓を使う (コマンドラインのプロセスには AppKit が
-/// 「ウインドウ」メニューを足さない)。並べる側は CGWindowList の位置で AX の窓を探すので、窓ごとに違う場所に開く
-@MainActor var fallbackWindows: [NSWindow] = []
-
-/// E2E の窓を 1 枚開き、air-eater が自前の frame で窓の数に合った配置に並べること。
-/// 期待する形は Arrangement.frames と同じで、新しい窓が手前
-func opensAndArrangesByFrames() throws {
-  try MainActor.assumeIsolated {
-    let start = logLines.count
-    let window = NSWindow(
-      contentRect: NSRect(x: 100 + 150 * fallbackWindows.count, y: 100, width: 400, height: 300),
-      styleMask: [.titled, .resizable], backing: .buffered, defer: false)
-    window.title = "air-eater E2E \(fallbackWindows.count + 1)"
-    window.isReleasedWhenClosed = false
-    fallbackWindows.append(window)
-    window.makeKeyAndOrderFront(nil)
-    NSApplication.shared.activate(ignoringOtherApps: true)
-    let count = fallbackWindows.count
-    let shown = Date()
-    try expect(
-      waitFor("自前の frame で \(count) 枚を並べた", from: start, timeout: .seconds(4)),
-      "自前の frame で \(count) 枚を並べたと air-eater が言わなかった")
-    // 窓の生成は AXObserver で拾うので、定期的な走査 (2 秒) を待たずに気づくはず
-    let latency = Date().timeIntervalSince(shown)
-    try expect(latency < 1, "窓が増えたと気づくのに \(latency) 秒かかった (通知でなく走査で拾った)")
-    guard let screen = window.screen ?? NSScreen.main,
-      let arrangement = Arrangement(windowCount: count)
-    else { throw Failure(description: "画面か配置が取れない") }
-    let wanted = arrangement.frames(in: screen.visibleFrame)
-    let deadline = Date(timeIntervalSinceNow: 3)
-    var mismatches: [String] = []
-    repeat {
-      pump(0.1)
-      mismatches = zip(fallbackWindows.reversed(), wanted).compactMap { window, want in
-        nearlyEqual(window.frame, want) ? nil : "\(window.title): \(window.frame) (期待 \(want))"
-      }
-    } while !mismatches.isEmpty && Date() < deadline
-    try expect(mismatches.isEmpty, "自前の frame で並ばなかった: \(mismatches)")
-  }
-}
-
-func closeFallbackWindows() {
-  MainActor.assumeIsolated {
-    fallbackWindows.forEach { $0.close() }
-    fallbackWindows.removeAll()
-  }
-}
-
 // MARK: - 窓を別の workspace へ移す
 
 /// 移す対象の Finder の窓。E2E 自身の窓は使えない。窓のドラッグはアプリ側がイベントを処理して
@@ -167,40 +114,4 @@ func closeMovedFinderWindow() {
   }
   pump(1)
   try? FileManager.default.removeItem(at: moveFolder)
-}
-
-// MARK: - 方向でフォーカスを移す
-
-/// Finder のフォーカス中の窓のタイトル。
-func finderFocusedWindowTitle() -> String? {
-  guard
-    let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
-      .first
-  else { return nil }
-  var window: CFTypeRef?
-  AXUIElementCopyAttributeValue(
-    AXUIElementCreateApplication(finder.processIdentifier), kAXFocusedWindowAttribute as CFString,
-    &window)
-  guard let window else { return nil }
-  var title: CFTypeRef?
-  AXUIElementCopyAttributeValue(
-    unsafeDowncast(window, to: AXUIElement.self), kAXTitleAttribute as CFString, &title)
-  return title as? String
-}
-
-/// focus を送ると、Finder のフォーカス中の窓が index 番目のフォルダの窓に変わること。
-func focusMoves(_ direction: String, toFolder index: Int) -> () throws -> Void {
-  {
-    let start = logLines.count
-    send("focus \(direction)")
-    try expect(waitFor("focus → \(direction) の窓", from: start), "focus が窓を選ばなかった")
-    let title = finderFolders[index].lastPathComponent
-    let deadline = Date(timeIntervalSinceNow: 2)
-    var focused: String?
-    repeat {
-      pump(0.1)
-      focused = finderFocusedWindowTitle()
-    } while focused != title && Date() < deadline
-    try expect(focused == title, "フォーカスが \(title) に移らなかった: \(focused ?? "なし")")
-  }
 }

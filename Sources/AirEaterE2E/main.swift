@@ -10,12 +10,26 @@ import Foundation
 
 let logLines = LogLines()
 
-/// seconds の間、メインのランループを回して待つ。
+/// seconds の間、NSApplication のイベントループを回して待つ。
 /// air-eater が E2E の窓を AX で動かすとき、その要求はこのプロセスのメインスレッドが受けるので、
-/// 眠って待つと AX の要求が詰まって窓が動かない
+/// 眠って待つと AX の要求が詰まって窓が動かない。RunLoop だけ回すのでは足りず、E2E 自身の窓の
+/// 閉じるボタンやドラッグはイベントを sendEvent で流さないと効かない
 func pump(_ seconds: Double) {
-  RunLoop.current.run(until: Date(timeIntervalSinceNow: seconds))
+  let until = Date(timeIntervalSinceNow: seconds)
+  // シナリオはメインスレッドで順に回している
+  MainActor.assumeIsolated {
+    let app = NSApplication.shared
+    repeat {
+      if let event = app.nextEvent(matching: .any, until: until, inMode: .default, dequeue: true) {
+        app.sendEvent(event)
+      }
+    } while Date() < until
+  }
 }
+
+// E2E は最初から通常のアプリとして動く (ownAppReady)。後から窓を出すときに購読や AX の準備が
+// 遅れないようにするため
+_ = ownAppReady
 
 /// from 行目以降に contains を含む行が出るまで待つ。
 func waitFor(_ contains: String, from index: Int, timeout: Duration = .seconds(3)) -> Bool {
@@ -161,101 +175,28 @@ scenarios += [
   ("E2E の窓を閉じる", { MainActor.assumeIsolated { tileWindow.close() } }),
 ]
 
-// MARK: - 自動タイル (macOS 標準の配置)
+// MARK: - 窓の種類ごとの共通シナリオ (自動タイル、フォーカス移動、閉じる)
 
-// 標準の配置は各アプリの「ウインドウ」メニューにあり、E2E のようなコマンドラインのプロセスには
-// AppKit が項目を足さない。Finder の窓で確かめる。開くのは E2E が作った一時フォルダだけ
-
-/// Finder で開く一時フォルダ。名前が窓のタイトルになる
-let finderFolders: [URL] = (1...2).map { index in
-  let url = FileManager.default.temporaryDirectory
-    .appendingPathComponent("air-eater-e2e-\(ProcessInfo.processInfo.processIdentifier)-\(index)")
-  try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-  return url
-}
-
-/// index 番目の一時フォルダを Finder で開き、expected の各窓がその位置に並ぶこと。
-/// expected は (何番目のフォルダの窓か, 期待する位置 (nil なら画面全体)) の並び
-func opensAndArranges(folder index: Int, expected: [(Int, Tile?)]) -> () throws -> Void {
-  {
-    let start = logLines.count
-    NSWorkspace.shared.open(finderFolders[index])
-    try expect(
-      waitFor("窓が \(index + 1) 枚になった", from: start, timeout: .seconds(4)),
-      "Finder の窓が \(index + 1) 枚になったと air-eater が気づかなかった")
-    let deadline = Date(timeIntervalSinceNow: 3)
-    var mismatches: [String] = []
-    repeat {
-      pump(0.1)
-      mismatches = expected.compactMap { folder, tile in
-        let title = finderFolders[folder].lastPathComponent
-        let frame = finderWindow(titled: title).flatMap(axFrame(of:))
-        let want = expectedAXFrame(tile)
-        return frame.map { nearlyEqual($0, want) } == true
-          ? nil : "\(title): \(frame.map { "\($0)" } ?? "窓が無い") (期待 \(want))"
-      }
-    } while !mismatches.isEmpty && Date() < deadline
-    try expect(mismatches.isEmpty, "標準の配置で並ばなかった: \(mismatches)")
+// Desktop 2 は空なので、そこに workspace 2 を作って窓を 3 枚まで開く。種類は WindowKinds.swift
+for kind in windowKinds {
+  guard kind.available() else {
+    print("… \(kind.name) はこの Mac に無いので飛ばす")
+    continue
   }
+  let tag = "[\(kind.name)]"
+  scenarios += [
+    ("\(tag) 空の Desktop 2 に workspace 2 を作る", workspace(2, reaches: 2)),
+    ("\(tag) 窓 1 枚目は画面全体に広がる", opensAndArranges(kind, 0)),
+    ("\(tag) 窓 2 枚目で左と右に並ぶ (手前の新しい窓が左)", opensAndArranges(kind, 1)),
+    ("\(tag) focus right で右の窓 (1 枚目) にフォーカスが移る", focusMoves(kind, "right", to: 0)),
+    ("\(tag) focus left で左の窓 (2 枚目) に戻る", focusMoves(kind, "left", to: 1)),
+    ("\(tag) 窓 3 枚目で左と 4 分割に並ぶ", opensAndArranges(kind, 2)),
+    ("\(tag) close で手前の窓が閉じ、残り 2 枚が左と右に並ぶ", closesFront(kind, leaving: 2)),
+    ("\(tag) close でまた手前の窓が閉じ、残りが画面全体に広がる", closesFront(kind, leaving: 1)),
+    ("\(tag) E2E が開いた窓を閉じる", { kind.closeAll() }),
+    ("\(tag) workspace 1 に戻る", workspace(1, reaches: 1)),
+  ]
 }
-
-/// close を送ると、手前にある 2 枚目の Finder の窓が閉じ、残った 1 枚目が画面全体に広がること。
-func closesFrontFinderWindow() throws {
-  let start = logLines.count
-  send("close")
-  try expect(waitFor("close → Finder の窓の閉じるボタンを押した", from: start), "close が Finder の窓を閉じなかった")
-  try expect(
-    waitFor("窓が 1 枚になった", from: start, timeout: .seconds(4)),
-    "閉じた後に窓が 1 枚になったと air-eater が気づかなかった")
-  let deadline = Date(timeIntervalSinceNow: 3)
-  var frame: CGRect?
-  repeat {
-    pump(0.1)
-    frame = finderWindow(titled: finderFolders[0].lastPathComponent).flatMap(axFrame(of:))
-  } while !(frame.map { nearlyEqual($0, expectedAXFrame(nil)) } ?? false) && Date() < deadline
-  try expect(
-    finderWindow(titled: finderFolders[1].lastPathComponent) == nil, "2 枚目の窓が閉じていない")
-  try expect(
-    frame.map { nearlyEqual($0, expectedAXFrame(nil)) } == true,
-    "残った窓が画面全体に広がらなかった: \(frame.map { "\($0)" } ?? "窓が無い")")
-}
-
-/// E2E が開いた Finder の窓を閉じる。
-func closeFinderWindows() {
-  for folder in finderFolders {
-    guard let window = finderWindow(titled: folder.lastPathComponent) else { continue }
-    var button: CFTypeRef?
-    AXUIElementCopyAttributeValue(window, kAXCloseButtonAttribute as CFString, &button)
-    if let button {
-      AXUIElementPerformAction(
-        unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
-    }
-  }
-  pump(1)
-  for folder in finderFolders { try? FileManager.default.removeItem(at: folder) }
-}
-
-scenarios += [
-  ("自動タイルを試すため空の Desktop 2 に workspace 2 を作る", workspace(2, reaches: 2)),
-  // 1 枚なら 画面全体に表示、2 枚なら 左と右 (前面の新しい窓が左)。
-  // close (Option+C) で手前の 2 枚目を閉じると 1 枚に戻り、自動タイルが画面全体に広げる
-  ("Finder の窓 1 枚目は画面全体に広がる", opensAndArranges(folder: 0, expected: [(0, nil)])),
-  (
-    "Finder の窓 2 枚目で左と右に並ぶ",
-    opensAndArranges(folder: 1, expected: [(1, .left), (0, .right)])
-  ),
-  // 方向でフォーカスを移す (Option+Shift+H/J/K/L)。左が手前 (2 枚目) の状態から右へ、そして左へ戻る
-  ("focus right で右の Finder の窓 (1 枚目) にフォーカスが移る", focusMoves("right", toFolder: 0)),
-  ("focus left で左の Finder の窓 (2 枚目) に戻る", focusMoves("left", toFolder: 1)),
-  ("close で手前の Finder の窓が閉じ、残りが画面全体に広がる", closesFrontFinderWindow),
-  ("E2E が開いた Finder の窓を閉じる", { closeFinderWindows() }),
-  // 純正の配置が無いアプリ (E2E 自身) の窓は、同じ形を自前の frame で作る
-  ("純正の配置が無い窓 1 枚目は通知で 1 秒以内に気づき、自前の frame で画面全体に広がる", opensAndArrangesByFrames),
-  ("純正の配置が無い窓 2 枚目で自前の frame で左と右に並ぶ", opensAndArrangesByFrames),
-  ("純正の配置が無い窓 3 枚目で自前の frame で左と 4 分割に並ぶ", opensAndArrangesByFrames),
-  ("自前の frame で並べた E2E の窓を閉じる", { closeFallbackWindows() }),
-  ("workspace 1 に戻る", workspace(1, reaches: 1)),
-]
 
 // MARK: - 端末を開く (Option+Return / Option+Shift+Return)
 

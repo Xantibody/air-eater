@@ -45,21 +45,55 @@ func nearlyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
     && abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
 }
 
+/// bundle ID のアプリの AX 要素。走っていなければ nil
+func axApplication(bundleIdentifier: String) -> AXUIElement? {
+  NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first
+    .map { AXUIElementCreateApplication($0.processIdentifier) }
+}
+
+func axWindows(of app: AXUIElement) -> [AXUIElement] {
+  var windows: CFTypeRef?
+  AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows)
+  return (windows as? [AXUIElement]) ?? []
+}
+
+func axTitle(of window: AXUIElement) -> String? {
+  var value: CFTypeRef?
+  AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &value)
+  return value as? String
+}
+
+/// app の窓のうち、タイトルが title で始まるもの。TextEdit は拡張子を隠すことがあるので前方一致
+func axWindow(of app: AXUIElement, titled title: String) -> AXUIElement? {
+  axWindows(of: app).first { axTitle(of: $0)?.hasPrefix(title) == true }
+}
+
+/// app でフォーカス中の窓のタイトル。
+func focusedWindowTitle(of app: AXUIElement) -> String? {
+  var window: CFTypeRef?
+  AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &window)
+  guard let window else { return nil }
+  return axTitle(of: unsafeDowncast(window, to: AXUIElement.self))
+}
+
+/// bundle ID のアプリの、タイトルが titles のどれかで始まる窓を閉じるボタンで閉じる。
+func closeWindows(of bundleIdentifier: String, titled titles: [String]) {
+  guard let app = axApplication(bundleIdentifier: bundleIdentifier) else { return }
+  for title in titles {
+    guard let window = axWindow(of: app, titled: title) else { continue }
+    var button: CFTypeRef?
+    AXUIElementCopyAttributeValue(window, kAXCloseButtonAttribute as CFString, &button)
+    if let button {
+      AXUIElementPerformAction(
+        unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
+    }
+  }
+  pump(1)
+}
+
 /// Finder の窓のうち、タイトルが title のもの。
 func finderWindow(titled title: String) -> AXUIElement? {
-  guard
-    let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
-      .first
-  else { return nil }
-  var windows: CFTypeRef?
-  AXUIElementCopyAttributeValue(
-    AXUIElementCreateApplication(finder.processIdentifier), kAXWindowsAttribute as CFString,
-    &windows)
-  return (windows as? [AXUIElement])?.first { window in
-    var value: CFTypeRef?
-    AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &value)
-    return value as? String == title
-  }
+  axApplication(bundleIdentifier: "com.apple.finder").flatMap { axWindow(of: $0, titled: title) }
 }
 
 /// AX 座標 (左上原点) の frame。
@@ -84,6 +118,16 @@ func expectedAXFrame(_ tile: Tile?) -> CGRect {
     let screen = NSScreen.screens[0]
     let cocoa = tile?.frame(in: screen.visibleFrame) ?? screen.visibleFrame
     return accessibilityFrame(fromCocoa: cocoa, primaryScreenHeight: screen.frame.height)
+  }
+}
+
+/// 主画面の可視領域を arrangement で割った場所を、手前の窓から順に AX 座標で。
+func expectedAXFrames(_ arrangement: Arrangement) -> [CGRect] {
+  MainActor.assumeIsolated {
+    let screen = NSScreen.screens[0]
+    return arrangement.frames(in: screen.visibleFrame).map {
+      accessibilityFrame(fromCocoa: $0, primaryScreenHeight: screen.frame.height)
+    }
   }
 }
 
