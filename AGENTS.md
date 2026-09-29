@@ -25,6 +25,8 @@ air-eater で作業する AI エージェントへの案内。人も読む。
 | `just e2e` | 実機で air-eater を起動し、標準入力から命令を送って確かめる。Desktop が 2 つ以上あり、Desktop 2 が空で、kitty があり、端末にアクセシビリティ権限があること。CI では回らない |
 | `just run` | 起動。`AIR_EATER_LOG_KEYS=1` で全キーをログに出す |
 
+- Desktop 1 と 2 の間に全画面アプリの Space があると、空の Desktop 2 に着いたときに macOS がその全画面アプリを前面にし、Space を勝手に移すことがある。E2E が間欠的に落ちたら、まずこれを疑う。Desktop 1 と 2 を隣り合わせにすると安定する
+- 窓の種類ごとの共通シナリオ (自動タイル、フォーカス移動、close) は `Sources/AirEaterE2E/WindowKinds.swift` に種類を足すだけで増やせる
 - 振る舞いを変えたら E2E のシナリオを足す (`Sources/AirEaterE2E`)。E2E 自身の窓、Finder の一時フォルダ、E2E が起動した kitty だけを動かし、使う人の窓には触らない。
 - swiftlint は strict。ファイルは 400 行まで、識別子は 3 文字以上。`x`、`y` は使えない。
 - Swift 6 の並行性検査が有効。通知のクロージャの中で `MainActor.assumeIsolated` を使うときは、Sendable でない値 (Notification、ポインタ) を外で取り出してから持ち込む。
