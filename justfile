@@ -14,7 +14,7 @@ test:
     swift test -Xswiftc -plugin-path -Xswiftc {{ testing_plugins }}
 
 run:
-    swift run air-eater
+    SWIFT_BACKTRACE=interactive=no swift run air-eater
 
 lint:
     swiftlint lint --strict --quiet
