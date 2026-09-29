@@ -84,6 +84,7 @@ extension WorkspacesLifecycleTests {
   @Test func leavingForSpaceOutsidePoolReleasesEmptyWorkspace() {
     var workspaces = Workspaces(desktops: 1...9)
     workspaces.enter(3)
+    workspaces.observe(desktop: 3, windows: [])
     workspaces.enter(nil)
     #expect(workspaces.workspace(on: 3) == nil)
   }
@@ -95,6 +96,7 @@ extension WorkspacesLifecycleTests {
     workspaces.enter(1)
     workspaces.assign(5, to: 2)
     workspaces.enter(2)
+    workspaces.observe(desktop: 2, windows: [])
     workspaces.enter(1)
     #expect(workspaces.candidate(for: 5) == 2)
     #expect(workspaces.lowestFreeID == 2)
@@ -138,5 +140,37 @@ extension WorkspacesNeighborTests {
     var workspaces = Workspaces(desktops: 1...9)
     workspaces.enter(1)
     #expect(workspaces.desktop(nextTo: .next) == 1)
+  }
+}
+
+extension WorkspacesLifecycleTests {
+  // 初めて行く Desktop へ移る途中は、マーカーが無く一瞬プール外に見える。
+  // 中身をまだ見ていない Desktop の割り当ては、そこで外さない
+  @Test func unobservedWorkspaceSurvivesPassingThroughOutsidePool() {
+    var workspaces = Workspaces(desktops: 1...9)
+    workspaces.assign(5, to: 2)
+    workspaces.enter(nil)
+    #expect(workspaces.workspace(on: 2) == 5)
+  }
+}
+
+@Suite struct WorkspacesEvictionTests {
+  // workspace 5 のために空き候補の Desktop 2 へ行ったら、元から窓があった
+  @Test func evictedDesktopKeepsOwnIDAndWorkspaceLooksElsewhere() {
+    var workspaces = Workspaces(desktops: 1...9)
+    workspaces.assign(5, to: 2)
+    workspaces.observe(desktop: 2, windows: [20])
+    workspaces.evict(5)
+    #expect(workspaces.workspace(on: 2) == 2)
+    #expect(workspaces.candidate(for: 5) == 1)
+  }
+}
+
+@Suite struct WorkspacesDescriptionTests {
+  @Test func describesWorkspacesInIDOrder() {
+    var workspaces = Workspaces(desktops: 1...9)
+    workspaces.assign(5, to: 2)
+    workspaces.assign(1, to: 1)
+    #expect(workspaces.description == "1→D1 5→D2")
   }
 }

@@ -15,6 +15,11 @@ public struct SpacePool: Sendable {
     desktops.filter { !(occupied[$0]?.isEmpty ?? true) }
   }
 
+  /// desktop を表示して、窓が無いと確かめたか。まだ見ていない Desktop は false。
+  public func isObservedEmpty(_ desktop: Int) -> Bool {
+    occupied[desktop]?.isEmpty ?? false
+  }
+
   /// 新しい workspace として使う、番号がいちばん小さい空き Desktop。
   public var firstEmpty: Int? {
     desktops.first { occupied[$0]?.isEmpty ?? true }

@@ -20,9 +20,16 @@ public struct Workspaces: Sendable {
     return pool.desktops.first { !taken.contains($0) && !pool.active.contains($0) }
   }
 
-  /// 空だと確かめた desktop を workspace id にする。
+  /// desktop を workspace id にする。
   public mutating func assign(_ id: Int, to desktop: Int) {
     assigned[id] = desktop
+  }
+
+  /// id のために確保した Desktop に元から窓があったとき、id をそこから外す。
+  /// その Desktop には自分の ID を付け直し、id は candidate で次の Desktop を引き直す
+  public mutating func evict(_ id: Int) {
+    guard let desktop = assigned.removeValue(forKey: id) else { return }
+    if pool.active.contains(desktop) { adopt(desktop) }
   }
 
   /// desktop を表示中に見えたウィンドウで、その Desktop の中身を置き換える。
@@ -35,11 +42,12 @@ public struct Workspaces: Sendable {
   public private(set) var current: Int?
 
   /// desktop (nil ならプール外の Space) を表示し始めた。
-  /// 表示中の Desktop は空でも workspace にし、離れた空の workspace は割り当てを外す
+  /// 表示中の Desktop は空でも workspace にし、離れた空の workspace は割り当てを外す。
+  /// 外すのは空だと見て確かめた Desktop だけで、まだ中身を見ていない Desktop は残す
   public mutating func enter(_ desktop: Int?) {
     current = desktop
     if let desktop { adopt(desktop) }
-    for (id, other) in assigned where other != desktop && !pool.active.contains(other) {
+    for (id, other) in assigned where other != desktop && pool.isObservedEmpty(other) {
       assigned[id] = nil
     }
   }
@@ -68,5 +76,12 @@ public struct Workspaces: Sendable {
     guard let index = ids.firstIndex(of: id) else { return nil }
     let step = direction == .next ? 1 : ids.count - 1
     return assigned[ids[(index + step) % ids.count]]
+  }
+}
+
+extension Workspaces: CustomStringConvertible {
+  /// ログ用。"1→D1 5→D2" の形で ID 順に並べる。
+  public var description: String {
+    assigned.sorted { $0.key < $1.key }.map { "\($0.key)→D\($0.value)" }.joined(separator: " ")
   }
 }
