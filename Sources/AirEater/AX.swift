@@ -42,3 +42,24 @@ func set(_ element: AXUIElement, _ attribute: String, _ point: CGPoint) -> AXErr
 struct AXFailure: Error {
   let code: AXError
 }
+
+/// 子要素 (kAXChildrenAttribute)。取れなければ空。
+func children(of element: AXUIElement) -> [AXUIElement] {
+  var value: CFTypeRef?
+  guard
+    AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value) == .success,
+    let array = value as? [AnyObject]
+  else { return [] }
+  return array.compactMap { item in
+    CFGetTypeID(item) == AXUIElementGetTypeID() ? unsafeDowncast(item, to: AXUIElement.self) : nil
+  }
+}
+
+/// 文字列や数値の属性。型が合わなければ nil。
+func attribute<T>(_ element: AXUIElement, _ attribute: String, as type: T.Type) -> T? {
+  var value: CFTypeRef?
+  guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
+    return nil
+  }
+  return value as? T
+}

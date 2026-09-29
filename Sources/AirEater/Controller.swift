@@ -25,6 +25,10 @@ final class Controller {
 
   func start() async {
     warnAboutDisabledShortcuts()
+    tracker.onWindowCountChanged = { [weak self] desktop, count in
+      log("Desktop \(desktop) の窓が \(count) 枚になった")
+      self?.arrange(windowCount: count)
+    }
 
     // 現在地はマーカーを置いて初めて分かる。Desktop 1 は必ずあるので、Ctrl+1 を送って
     // 切り替わっても、既に居て切り替わらなくても、その後の Space は Desktop 1 だと決まる
@@ -190,6 +194,28 @@ final class Controller {
     case .neighbor(let direction): await goToNeighbor(direction)
     case .newWorkspace: await openNewWorkspace()
     case .tile(let tile): tileFocusedWindow(tile)
+    case .arrange: arrangeCurrentWorkspace()
     }
+  }
+
+  // MARK: - 自動タイル
+
+  /// 今の workspace の窓を、数に合った macOS 標準の配置で並べる。
+  private func arrangeCurrentWorkspace() {
+    tracker.refresh()
+    guard let count = tracker.visibleWindowCount else {
+      log("arrange → 今の Space の窓の数が分からない")
+      return
+    }
+    arrange(windowCount: count)
+  }
+
+  private func arrange(windowCount count: Int) {
+    guard let arrangement = Arrangement(windowCount: count) else {
+      log("arrange → 窓 \(count) 枚に合う標準の配置が無いので並べない")
+      return
+    }
+    log("arrange → 窓 \(count) 枚なので \(arrangement)")
+    arrangeFrontmost(arrangement)
   }
 }

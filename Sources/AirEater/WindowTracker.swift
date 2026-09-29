@@ -30,7 +30,9 @@ final class WindowTracker {
     let settling = isSettling
     if let desktop, !settling {
       workspaces.observe(desktop: desktop, windows: visible)
+      noteWindowCount(visible.count, on: desktop)
     }
+    visibleWindowCount = desktop != nil && !settling ? visible.count : nil
     workspaces.retain(
       existing: managedWindows(in: windowList(.optionAll), excludingProcess: getpid()))
     workspaces.enter(desktop)
@@ -47,6 +49,23 @@ final class WindowTracker {
 
   /// 最後に refresh したときの現在地・workspace・見えている窓。
   private(set) var summary = ""
+
+  // MARK: - 窓の数
+
+  /// 今の Desktop に見えている窓の数。移動中やプール外の Space では nil
+  private(set) var visibleWindowCount: Int?
+
+  /// Desktop の窓の数が前に見たときから変わった。自動タイルの引き金
+  var onWindowCountChanged: (_ desktop: Int, _ count: Int) -> Void = { _, _ in }
+  private var lastWindowCounts: [Int: Int] = [:]
+
+  /// 初めて見た Desktop の窓の数は「変わった」と扱わない。起動直後や初めて行った Desktop で、
+  /// ユーザーが並べていた窓を勝手に並べ直さないため
+  private func noteWindowCount(_ count: Int, on desktop: Int) {
+    let previous = lastWindowCounts.updateValue(count, forKey: desktop)
+    guard let previous, previous != count else { return }
+    onWindowCountChanged(desktop, count)
+  }
 
   private var state: String {
     "\(current.map(String.init) ?? "-") \(workspaces) \(workspaces.pool)"
