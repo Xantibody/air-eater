@@ -87,6 +87,7 @@ final class Controller {
 
   private func spaceDidChange() {
     log("Space が変わった (前面: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"))")
+    tracker.noteTransition()
     tracker.refresh()
     guard let pending = pendingSwitch,
       ContinuousClock.now - pending.at < manualSwitchWindow
@@ -150,6 +151,7 @@ final class Controller {
       log("既に Desktop \(desktop) にいる")
       return true
     }
+    tracker.noteTransition()
     guard await switchDesktop(to: desktop) else {
       // 今いる Desktop が分からないときは、既に desktop に居て切り替わらなかった可能性もある。
       // そのときはマーカーを置かず、報告もしない
@@ -159,7 +161,8 @@ final class Controller {
       return false
     }
     await markers.placeIfMissing(on: desktop)
-    tracker.refresh()
+    // 着いた Desktop に窓があるかは、移動が落ち着いてからでないと正しく見えない
+    await tracker.refreshAfterSettling()
     return true
   }
 

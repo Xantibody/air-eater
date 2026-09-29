@@ -26,13 +26,16 @@ final class WindowTracker {
     let before = (current, pool.description)
     current = currentDesktop(markers: markers.ids, onScreen: onScreenIDs)
     let visible = managedWindows(in: onScreen, excludingProcess: getpid())
-    if let current {
+    let settling = isSettling
+    if let current, !settling {
       pool.observe(desktop: current, windows: visible)
     }
     pool.retain(existing: managedWindows(in: windowList(.optionAll), excludingProcess: getpid()))
 
     let place = current.map { "Desktop \($0)" } ?? "不明 (マーカーの無い Space)"
-    summary = "現在地 \(place) / プール \(pool.description) / 見えている窓 \(names(of: visible, in: onScreen))"
+    summary =
+      "現在地 \(place)\(settling ? " (移動中なので窓は数えない)" : "") / プール \(pool.description)"
+      + " / 見えている窓 \(names(of: visible, in: onScreen))"
     // 1 秒ごとに呼ばれるので、変わったときだけ出す
     guard before != (current, pool.description) else { return }
     log(summary)
@@ -40,6 +43,32 @@ final class WindowTracker {
 
   /// 最後に refresh したときの現在地・プール・見えている窓。
   private(set) var summary = ""
+
+  // MARK: - 移動中の扱い
+
+  /// 切り替えのアニメーション中は、移動元と移動先 (と、途中で割り込んだ Space) の窓が
+  /// 同時に画面に写る。そのまま数えると、よその窓をこの Desktop の窓として数えてしまう。
+  /// 実機では、Ctrl+N を送ってから約 0.3 秒で通知が来て、その後 0.4 秒ほど別の Space の窓が写った
+  private let settleDuration: Duration = .milliseconds(600)
+  private var lastTransition: ContinuousClock.Instant?
+
+  private var isSettling: Bool {
+    lastTransition.map { ContinuousClock.now - $0 < settleDuration } ?? false
+  }
+
+  /// Space の移動が始まった (Ctrl+N を送った、通知を受けた) ことを記録する。
+  func noteTransition() {
+    lastTransition = .now
+  }
+
+  /// 移動が落ち着くまで待ってから観測する。着いた Desktop に窓があるかを見るときに使う。
+  func refreshAfterSettling() async {
+    if let lastTransition {
+      let remaining = settleDuration - (ContinuousClock.now - lastTransition)
+      if remaining > .zero { try? await Task.sleep(for: remaining) }
+    }
+    refresh()
+  }
 
   private func names(of windows: Set<CGWindowID>, in windowList: [[String: Any]]) -> String {
     let entries = windowList.compactMap { info -> String? in
