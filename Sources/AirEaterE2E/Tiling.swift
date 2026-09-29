@@ -75,3 +75,49 @@ func fillsFromFullscreen() throws {
       "全画面を解いた窓が可視領域いっぱいにならなかった: \(tileWindow.frame) (期待 \(expected))")
   }
 }
+
+// MARK: - 純正の配置が無いアプリの自前の frame
+
+/// 純正の配置が無いアプリの代表として、E2E 自身の窓を使う (コマンドラインのプロセスには AppKit が
+/// 「ウインドウ」メニューを足さない)。並べる側は CGWindowList の位置で AX の窓を探すので、窓ごとに違う場所に開く
+@MainActor var fallbackWindows: [NSWindow] = []
+
+/// E2E の窓を 1 枚開き、air-eater が自前の frame で窓の数に合った配置に並べること。
+/// 期待する形は Arrangement.frames と同じで、新しい窓が手前
+func opensAndArrangesByFrames() throws {
+  try MainActor.assumeIsolated {
+    let start = logLines.count
+    let window = NSWindow(
+      contentRect: NSRect(x: 100 + 150 * fallbackWindows.count, y: 100, width: 400, height: 300),
+      styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+    window.title = "air-eater E2E \(fallbackWindows.count + 1)"
+    window.isReleasedWhenClosed = false
+    fallbackWindows.append(window)
+    window.makeKeyAndOrderFront(nil)
+    NSApplication.shared.activate(ignoringOtherApps: true)
+    let count = fallbackWindows.count
+    try expect(
+      waitFor("自前の frame で \(count) 枚を並べた", from: start, timeout: .seconds(4)),
+      "自前の frame で \(count) 枚を並べたと air-eater が言わなかった")
+    guard let screen = window.screen ?? NSScreen.main,
+      let arrangement = Arrangement(windowCount: count)
+    else { throw Failure(description: "画面か配置が取れない") }
+    let wanted = arrangement.frames(in: screen.visibleFrame)
+    let deadline = Date(timeIntervalSinceNow: 3)
+    var mismatches: [String] = []
+    repeat {
+      pump(0.1)
+      mismatches = zip(fallbackWindows.reversed(), wanted).compactMap { window, want in
+        nearlyEqual(window.frame, want) ? nil : "\(window.title): \(window.frame) (期待 \(want))"
+      }
+    } while !mismatches.isEmpty && Date() < deadline
+    try expect(mismatches.isEmpty, "自前の frame で並ばなかった: \(mismatches)")
+  }
+}
+
+func closeFallbackWindows() {
+  MainActor.assumeIsolated {
+    fallbackWindows.forEach { $0.close() }
+    fallbackWindows.removeAll()
+  }
+}

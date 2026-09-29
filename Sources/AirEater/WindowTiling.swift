@@ -28,8 +28,12 @@ private func screen(containing window: AXUIElement, primaryHeight: CGFloat) -> N
     let origin: CGPoint = value(window, kAXPositionAttribute, .cgPoint, .zero),
     let size: CGSize = value(window, kAXSizeAttribute, .cgSize, .zero)
   else { return nil }
-  // AX (左上原点) の中心を Cocoa (左下原点) に直して、それを含む画面を探す
-  let center = CGPoint(
-    x: origin.x + size.width / 2, y: primaryHeight - (origin.y + size.height / 2))
+  return screen(containingAXFrame: CGRect(origin: origin, size: size), primaryHeight: primaryHeight)
+}
+
+/// AX 座標 (左上原点) の frame の中心を含む画面。
+func screen(containingAXFrame frame: CGRect, primaryHeight: CGFloat) -> NSScreen? {
+  // AX の中心を Cocoa (左下原点) に直して、それを含む画面を探す
+  let center = CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
   return NSScreen.screens.first { $0.frame.contains(center) }
 }

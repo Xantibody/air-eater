@@ -260,6 +260,7 @@ final class Controller {
       return
     }
     log("arrange → 窓 \(count) 枚なので \(arrangement)")
-    arrangeFrontmost(arrangement)
+    // 純正の配置を押せないアプリ (Electron、Qt など) の窓だけ、同じ形を自前の frame で作る
+    if !arrangeFrontmost(arrangement) { arrangeByFrames(arrangement) }
   }
 }
