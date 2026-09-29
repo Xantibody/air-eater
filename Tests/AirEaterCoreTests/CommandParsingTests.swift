@@ -25,7 +25,7 @@ extension CommandParsingTests {
       ("tile bottom", .tile(.bottom)),
       ("tile top", .tile(.top)),
       ("tile right", .tile(.right)),
-      ("  workspace 3  ", .workspace(3)),
+      ("  workspace 3  ", .workspace(3)), ("arrange", .arrange),
     ] as [(String, Command)])
   func lineParsesToCommand(line: String, expected: Command) {
     #expect(Command(parsing: line) == expected)

@@ -7,6 +7,8 @@ public enum Command: Equatable, Sendable {
   case neighbor(SpacePool.Direction)
   case newWorkspace
   case tile(Tile)
+  /// 今の workspace の窓を、数に合った macOS 標準の配置で並べ直す
+  case arrange
 }
 
 /// 数字以外の Super+キー。hjkl は vim と同じ向き
@@ -43,7 +45,8 @@ public func desktopSwitched(keyCode: CGKeyCode, flags: CGEventFlags) -> Int? {
 
 extension Command {
   /// テストや外部からの操作用に、1 行の文字列から操作を読む。
-  /// 形は `workspace <N>` / `neighbor previous|next` / `new` / `tile left|bottom|top|right`
+  /// 形は `workspace <N>` / `neighbor previous|next` / `new` / `tile left|bottom|top|right` /
+  /// `arrange`
   public init?(parsing line: String) {
     let words = line.split(separator: " ").map(String.init)
     switch (words.first, words.dropFirst().first, words.count) {
@@ -53,6 +56,7 @@ extension Command {
     case ("neighbor", "previous", 2): self = .neighbor(.previous)
     case ("neighbor", "next", 2): self = .neighbor(.next)
     case ("new", nil, 1): self = .newWorkspace
+    case ("arrange", nil, 1): self = .arrange
     case ("tile", let side?, 2):
       guard let tile = Tile.allCases.first(where: { "\($0)" == side }) else { return nil }
       self = .tile(tile)
