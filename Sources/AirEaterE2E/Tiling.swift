@@ -42,7 +42,36 @@ func tiles(_ tile: Tile) -> () throws -> Void {
       while Date() < deadline, !nearlyEqual(tileWindow.frame, expected) { pump(0.05) }
       try expect(
         nearlyEqual(tileWindow.frame, expected),
-        "窓が \(tile) 半分にならなかった: \(tileWindow.frame) (期待 \(expected))")
+        "窓が \(tile) の大きさにならなかった: \(tileWindow.frame) (期待 \(expected))")
     }
+  }
+}
+
+/// ネイティブの全画面にした E2E の窓に tile fill を送ると、全画面が解けて可視領域いっぱいになること。
+/// 全画面は別の Space に移るので、戻って落ち着くまで含めて待つ
+func fillsFromFullscreen() throws {
+  try MainActor.assumeIsolated {
+    tileWindow.collectionBehavior = .fullScreenPrimary
+    tileWindow.toggleFullScreen(nil)
+    var deadline = Date(timeIntervalSinceNow: 4)
+    while Date() < deadline, !tileWindow.styleMask.contains(.fullScreen) { pump(0.05) }
+    try expect(tileWindow.styleMask.contains(.fullScreen), "E2E の窓が全画面にならなかった")
+    // styleMask は遷移の始まりで変わる。遷移中に AXFullScreen を書いても無視されるので、
+    // 窓が画面全体に広がって落ち着くまで待つ
+    while Date() < deadline, tileWindow.frame != tileWindow.screen?.frame { pump(0.05) }
+    pump(1.5)
+
+    send("tile fill")
+    deadline = Date(timeIntervalSinceNow: 6)
+    while Date() < deadline, tileWindow.styleMask.contains(.fullScreen) { pump(0.05) }
+    try expect(!tileWindow.styleMask.contains(.fullScreen), "全画面が解けなかった")
+    guard let screen = tileWindow.screen ?? NSScreen.main else {
+      throw Failure(description: "画面が取れない")
+    }
+    let expected = screen.visibleFrame
+    while Date() < deadline, !nearlyEqual(tileWindow.frame, expected) { pump(0.05) }
+    try expect(
+      nearlyEqual(tileWindow.frame, expected),
+      "全画面を解いた窓が可視領域いっぱいにならなかった: \(tileWindow.frame) (期待 \(expected))")
   }
 }

@@ -8,3 +8,6 @@ func requestAccessibilityPermission() -> Bool {
   let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
   return AXIsProcessTrustedWithOptions(options)
 }
+
+/// 窓がネイティブの全画面かどうか。読み書きできるが、公開ヘッダに定義が無い
+let fullscreenAttribute = "AXFullScreen"

@@ -148,6 +148,8 @@ scenarios += [
   ("tile bottom で窓が下半分になる", tiles(.bottom)),
   ("tile top で窓が上半分になる", tiles(.top)),
   ("tile right で窓が右半分になる", tiles(.right)),
+  ("tile fill で窓が可視領域いっぱいになる", tiles(.fill)),
+  ("全画面の窓に tile fill を送ると、全画面を解いて可視領域いっぱいになる", fillsFromFullscreen),
   ("E2E の窓を閉じる", { MainActor.assumeIsolated { tileWindow.close() } }),
 ]
 

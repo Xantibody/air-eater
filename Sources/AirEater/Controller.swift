@@ -215,10 +215,31 @@ final class Controller {
       log("今の workspace に端末を開く")
       await launchTerminal()
     case .newWorkspace: await openNewWorkspace()
-    case .tile(let tile): tileFocusedWindow(tile)
+    case .tile(let tile):
+      if tile == .fill { await leaveNativeFullscreen() }
+      tileFocusedWindow(tile)
     case .arrange: arrangeCurrentWorkspace()
     case .close: closeFocusedWindow()
     }
+  }
+
+  // MARK: - 全画面
+
+  /// 前面の窓がネイティブの全画面なら解く。解いた窓は元の Desktop に戻り、Space も切り替わるので、
+  /// 落ち着くまで待つ。この後で fill を書けば、全画面と同じ大きさの窓として workspace に収まる
+  private func leaveNativeFullscreen() async {
+    guard let (window, appName) = focusedWindow(for: "fill"),
+      attribute(window, fullscreenAttribute, as: Bool.self) == true
+    else { return }
+    log("fill → \(appName) の窓は全画面なので解く")
+    tracker.noteTransition()
+    let switched = await waitForSpaceChange(timeout: .seconds(2)) {
+      let error = AXUIElementSetAttributeValue(
+        window, fullscreenAttribute as CFString, kCFBooleanFalse)
+      if error != .success { log("fill → 全画面を解けなかった (AXError \(error.rawValue))") }
+    }
+    log("fill → 全画面を解いて\(switched ? "元の Desktop に戻った" : "も Space が変わらなかった")")
+    await tracker.refreshAfterSettling()
   }
 
   // MARK: - 自動タイル
