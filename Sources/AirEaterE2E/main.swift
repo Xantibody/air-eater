@@ -1,4 +1,5 @@
 import AirEaterCore
+import AppKit
 import Carbon.HIToolbox
 import CoreGraphics
 import Foundation
@@ -34,12 +35,19 @@ final class LogLines: @unchecked Sendable {
 
 let logLines = LogLines()
 
+/// seconds の間、メインのランループを回して待つ。
+/// air-eater が E2E の窓を AX で動かすとき、その要求はこのプロセスのメインスレッドが受けるので、
+/// 眠って待つと AX の要求が詰まって窓が動かない
+func pump(_ seconds: Double) {
+  RunLoop.current.run(until: Date(timeIntervalSinceNow: seconds))
+}
+
 /// from 行目以降に contains を含む行が出るまで待つ。
 func waitFor(_ contains: String, from index: Int, timeout: Duration = .seconds(3)) -> Bool {
   let deadline = ContinuousClock.now + timeout
   while ContinuousClock.now < deadline {
     if logLines.lines(from: index).contains(where: { $0.contains(contains) }) { return true }
-    Thread.sleep(forTimeInterval: 0.05)
+    pump(0.05)
   }
   return false
 }
@@ -122,7 +130,7 @@ func arrivesAndStays(
   trigger()
   try expect(isAt(desktop, within: .seconds(3)), "Desktop \(desktop) にいると分からなかった")
   let arrived = logLines.count
-  Thread.sleep(forTimeInterval: Double(settle.components.seconds))
+  pump(Double(settle.components.seconds))
   let after = logLines.lines(from: arrived)
   let moved = after.filter { $0.contains("現在地 ") && !$0.contains("現在地 Desktop \(desktop) ") }
   try expect(moved.isEmpty, "Desktop \(desktop) に着いた後に移動した: \(moved)")
@@ -202,6 +210,66 @@ scenarios += [
   ("workspace 5 から隣 (ID 順で折り返して workspace 1) へ行く", neighbor("next", reaches: 1)),
   ("空のまま離れた workspace 5 は消える", workspaces(include: "5→D2", false)),
   ("workspace 1 のまま留まる", workspace(1, reaches: 1)),
+]
+
+// MARK: - タイル
+
+/// 動かされる側の窓。ユーザーの窓には触らないよう、E2E 自身が開く
+let tileWindow: NSWindow = {
+  NSApplication.shared.setActivationPolicy(.regular)
+  // これを呼ばないと AppKit のアクセシビリティが立ち上がらず、air-eater からの AX の問い合わせに
+  // 答えられない (kAXErrorCannotComplete になる)
+  NSApplication.shared.finishLaunching()
+  let window = NSWindow(
+    contentRect: NSRect(x: 200, y: 200, width: 400, height: 300),
+    styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+  window.title = "air-eater E2E"
+  window.isReleasedWhenClosed = false
+  return window
+}()
+
+/// E2E の窓を開いて前面に出す。air-eater はフォーカス中の窓を動かすので、これが前提になる
+func showTileWindow() throws {
+  let start = logLines.count
+  // シナリオはメインスレッドで順に回している
+  MainActor.assumeIsolated {
+    tileWindow.makeKeyAndOrderFront(nil)
+    NSApplication.shared.activate(ignoringOtherApps: true)
+  }
+  try expect(waitFor("前面のアプリ → AirEaterE2E", from: start), "E2E の窓が前面にならなかった")
+}
+
+/// tile を送ると、E2E の窓がその画面の可視領域の半分に収まること。
+func tiles(_ tile: Tile) -> () throws -> Void {
+  {
+    try MainActor.assumeIsolated {
+      guard let screen = tileWindow.screen ?? NSScreen.main else {
+        throw Failure(description: "画面が取れない")
+      }
+      let expected = tile.frame(in: screen.visibleFrame)
+      send("tile \(tile)")
+      let deadline = Date(timeIntervalSinceNow: 2)
+      while Date() < deadline, !nearlyEqual(tileWindow.frame, expected) { pump(0.05) }
+      try expect(
+        nearlyEqual(tileWindow.frame, expected),
+        "窓が \(tile) 半分にならなかった: \(tileWindow.frame) (期待 \(expected))")
+    }
+  }
+}
+
+/// 座標の丸めで 1〜2 pt ずれることがあるので、それは同じとみなす
+func nearlyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+  abs(lhs.minX - rhs.minX) <= 2 && abs(lhs.minY - rhs.minY) <= 2
+    && abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
+}
+
+scenarios += [
+  ("E2E の窓を開いて前面に出す", showTileWindow),
+  ("tile left で窓が左半分になる", tiles(.left)),
+  ("tile bottom で窓が下半分になる", tiles(.bottom)),
+  ("tile top で窓が上半分になる", tiles(.top)),
+  ("tile right で窓が右半分になる", tiles(.right)),
+  ("E2E の窓を閉じる", { MainActor.assumeIsolated { tileWindow.close() } }),
 ]
 
 // MARK: - 実行
