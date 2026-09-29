@@ -15,7 +15,7 @@
 | 現在地 (current) | 今表示している Desktop。マーカーの無い Space (未訪問の Desktop、全画面) にいる間は nil で、そこの窓はどこにも数えない | `Workspaces.current`、`CurrentDesktop` |
 | 数える窓 (managed) | 通常レイヤーにあり、alpha が 0 でなく、自分と macOS のオーバーレイ (WindowManager) 以外の窓 | `ManagedWindows` |
 | 移動中 (settling) | Ctrl+N を送った、通知を受けた、手の Ctrl+N を見た、のいずれかから 600 ms。この間は移動元と移動先の窓が同時に写るので数えない | `WindowTracker` |
-| 命令 (Command) | Option+キー か標準入力の 1 行から読む操作。`workspace N`、`neighbor`、`terminal`、`new`、`tile <side>`、`arrange`、`close` | `KeyCommand` |
+| 命令 (Command) | Option+キー か標準入力の 1 行から読む操作。`workspace N`、`move N`、`neighbor`、`terminal`、`new`、`tile <side>`、`arrange`、`close` | `KeyCommand` |
 | 配置 (Arrangement) | 窓の数に合った純正の形。1 枚は全体、2 枚は左と右、3 枚は左と 4 分割、4 枚は 4 分割。5 枚以上は並べない | `Arrangement` |
 | Tile | Option+H/J/K/L/F で書く 1 枚の窓の frame。左右上下の半分と、可視領域いっぱい (fill) | `Tile` |
 
@@ -34,6 +34,12 @@
 1. AXObserver かアプリの通知が来たら 80 ms 置いて観測し直す。通知が欠けても 2 秒ごとの走査が拾う。
 2. 現在地の窓の数が前に見たときから変わっていたら、数に合った配置を選ぶ。初めて見た Desktop では動かない (使う人が並べた窓を勝手に並べ直さない)。
 3. 前面のアプリの「ウインドウ」メニューから純正の配置を AX で押す。メニューが無いアプリなら、写っている窓を手前から順に取り、同じ形の frame を AX で書く。
+
+### Option+Shift+N で窓を workspace N へ移す
+
+1. 行き先の Desktop は Option+N と同じ手順で決める (無ければ確保する)。
+2. フォーカス中の窓のタイトルバーの中央を掴み、数 px ドラッグしてから Ctrl+数字 を送る。切り替わってから 0.9 秒掴んだまま待ち、離す。カーソルは元の位置へ戻す。
+3. 全画面と最小化の窓は掴めないので断る。移動中は「移動中」の猶予がそのまま効く。
 
 ### 端末を開く
 

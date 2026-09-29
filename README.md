@@ -13,7 +13,7 @@ macOS の Space をあらかじめ確保した固定プールとして扱い、H
 
 ### ウィンドウを Space 間で動かさない
 
-既存ウィンドウを別の Space へ移す公開 API は無い。そこで `movetoworkspace` は v1 の仕様から外し、代わりに「新しい workspace でアプリを開く」を入り口にする。
+既存ウィンドウを別の Space へ移す公開 API は無い。そこで「新しい workspace でアプリを開く」を入り口にし、窓の移動は使う人が Option+Shift+数字 を押したときにだけ行う (タイトルバーを掴んだまま Ctrl+数字 を送る、脆いが公開 API だけの手法)。自動では窓を動かさない。
 
 macOS は新しいウィンドウを必ず今いる Space に開く。先に Space を切り替えてから起動すれば、ウィンドウは最初から目的の workspace に生まれる。
 
@@ -69,7 +69,7 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 | 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
 | 画面いっぱいに広げる (fullscreen の代わり) | Option+F | 可視領域いっぱいの frame を書き込む。ネイティブの全画面になっている窓なら、先に全画面を解いて元の Desktop に戻す |
 | フォーカス中の窓を閉じる | Option+C | 閉じるボタンを押す (Hyprland の killactive)。アプリは終了しない |
-| ウィンドウを別 workspace へ移動 | — | v1 では非対応 |
+| フォーカス中の窓を workspace N へ移す | Option+Shift+1…9 | タイトルバーを掴んで数 px ドラッグした状態で Ctrl+数字 を送り、切り替わってから離す (Hyprland の movetoworkspace。窓と一緒に移る)。約 1.5 秒かかり、その間カーソルが動く。全画面と最小化の窓は移せない |
 
 ネイティブの全画面は使わない。全画面の窓は別の Space に入って workspace の外に出てしまい、戻る先の Space も公開 API では選べないため、Hyprland の fullscreen に当たる操作は「窓を画面いっぱいの大きさにする」に置き換えている。
 
