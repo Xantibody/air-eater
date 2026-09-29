@@ -310,6 +310,13 @@ scenarios += [
   ("workspace 1 に戻る", workspace(1, reaches: 1)),
   ("new で新しい workspace に端末が開き、画面全体に広がる", launchesTerminal("new", count: 1, expected: [(0, nil)])),
   ("E2E が起動した端末を終わらせる", { quitLaunchedTerminals() }),
+  // 窓の移動 (Option+Shift+数字)。Finder の窓を Desktop 1 で開き、workspace 2 へ移す
+  ("workspace 1 に戻る", workspace(1, reaches: 1)),
+  (
+    "move 2 で Finder の窓が workspace 2 へ移り、一緒に Desktop 2 に着く",
+    movesFinderWindow(toWorkspace: 2, reaches: 2)
+  ),
+  ("移した Finder の窓を閉じる", { closeMovedFinderWindow() }),
   ("workspace 1 に戻って終わる", workspace(1, reaches: 1)),
 ]
 

@@ -115,18 +115,19 @@ final class Controller {
 
   /// workspace id へ行く。まだ無ければ空き Desktop に作る (Hyprland の `workspace N`)。
   /// 着いたら true。
+  /// dragging なら、フォーカス中の窓を掴んだまま切り替えて、窓も一緒に移す。
   @discardableResult
-  private func goToWorkspace(_ id: Int) async -> Bool {
+  private func goToWorkspace(_ id: Int, dragging: Bool = false) async -> Bool {
     let existing = tracker.reloadExistingDesktops()
     while let target = tracker.workspaces.candidate(for: id) {
       let exists = tracker.workspaces.workspace(on: target) == id
       if exists {
         log("workspace \(id) → Desktop \(target) (\(tracker.workspaces))")
-        return await go(to: target)
+        return await go(to: target, dragging: dragging)
       }
       log("workspace \(id) を空き候補の Desktop \(target) に作る (\(tracker.workspaces))")
       tracker.assign(id, to: target)
-      guard await go(to: target) else {
+      guard await go(to: target, dragging: dragging) else {
         tracker.evict(id)
         return false
       }
@@ -161,14 +162,16 @@ final class Controller {
 
   /// desktop へ切り替え、初めて来た Desktop ならマーカーを置く。着けなければ false。
   @discardableResult
-  private func go(to desktop: Int) async -> Bool {
+  private func go(to desktop: Int, dragging: Bool = false) async -> Bool {
     let origin = tracker.current
     guard origin != desktop else {
       log("既に Desktop \(desktop) にいる")
       return true
     }
     tracker.noteTransition()
-    guard await switchDesktop(to: desktop) else {
+    let switched =
+      dragging ? await dragFocusedWindow(to: desktop) : await switchDesktop(to: desktop)
+    guard switched else {
       // 今いる Desktop が分からないときは、既に desktop に居て切り替わらなかった可能性もある。
       // そのときはマーカーを置かず、報告もしない
       if origin != nil {
@@ -219,6 +222,9 @@ final class Controller {
       log("今の workspace に端末を開く")
       await launchTerminal()
     case .newWorkspace: await openNewWorkspace()
+    case .moveToWorkspace(let workspace):
+      log("フォーカス中の窓を workspace \(workspace) へ移す")
+      await goToWorkspace(workspace, dragging: true)
     case .tile(let tile):
       if tile == .fill { await leaveNativeFullscreen() }
       tileFocusedWindow(tile)
