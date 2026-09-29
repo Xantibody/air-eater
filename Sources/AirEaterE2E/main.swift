@@ -100,6 +100,11 @@ func workspaces(include expected: String, _ included: Bool = true) -> () throws 
   }
 }
 
+/// previous を送ると Desktop desktop に着いて留まること。
+func previous(reaches desktop: Int) -> () throws -> Void {
+  { try arrivesAndStays(at: desktop) { send("previous") } }
+}
+
 /// neighbor を送ると Desktop desktop に着いて留まること。
 func neighbor(_ direction: String, reaches desktop: Int) -> () throws -> Void {
   { try arrivesAndStays(at: desktop) { send("neighbor \(direction)") } }
@@ -137,6 +142,9 @@ scenarios += [
   ("workspace 5 は Desktop 2 にある", workspaces(include: "5→D2")),
   ("workspace 5 から隣 (ID 順で折り返して workspace 1) へ行く", neighbor("next", reaches: 1)),
   ("空のまま離れた workspace 5 は消える", workspaces(include: "5→D2", false)),
+  // 直前の workspace は ID で覚えているので、消えた 5 にも戻れる (空き Desktop 2 に作り直す)
+  ("previous で直前の workspace 5 に戻る (消えていたので作り直す)", previous(reaches: 2)),
+  ("previous でまた workspace 1 に戻る", previous(reaches: 1)),
   ("workspace 1 のまま留まる", workspace(1, reaches: 1)),
 ]
 

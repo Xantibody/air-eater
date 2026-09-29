@@ -225,16 +225,31 @@ final class Controller {
     case .moveToWorkspace(let workspace):
       log("フォーカス中の窓を workspace \(workspace) へ移す")
       await goToWorkspace(workspace, dragging: true)
-    case .tile(let tile):
-      if tile == .fill { await leaveNativeFullscreen() }
-      tileFocusedWindow(tile)
+    case .tile(let tile): await tileFocused(tile)
     case .arrange: arrangeCurrentWorkspace()
     case .close: closeFocusedWindow()
     case .focus(let direction): moveFocus(direction)
+    case .previousWorkspace: await goToPreviousWorkspace()
     }
   }
 
+  /// 直前にいた workspace へ戻る (Hyprland の workspace previous)。消えていれば作り直す。
+  private func goToPreviousWorkspace() async {
+    guard let previous = tracker.workspaces.previousID else {
+      log("直前の workspace がまだ無い")
+      return
+    }
+    log("直前の workspace \(previous) へ戻る")
+    await goToWorkspace(previous)
+  }
+
   // MARK: - 全画面
+
+  /// フォーカス中の窓を tile に寄せる。fill は全画面の代わりなので、全画面の窓なら先に解く。
+  private func tileFocused(_ tile: Tile) async {
+    if tile == .fill { await leaveNativeFullscreen() }
+    tileFocusedWindow(tile)
+  }
 
   /// 前面の窓がネイティブの全画面なら解く。解いた窓は元の Desktop に戻り、Space も切り替わるので、
   /// 落ち着くまで待つ。この後で fill を書けば、全画面と同じ大きさの窓として workspace に収まる
