@@ -113,6 +113,7 @@ final class Controller {
   /// 着いたら true。
   @discardableResult
   private func goToWorkspace(_ id: Int) async -> Bool {
+    let existing = tracker.reloadExistingDesktops()
     while let target = tracker.workspaces.candidate(for: id) {
       let exists = tracker.workspaces.workspace(on: target) == id
       if exists {
@@ -130,7 +131,9 @@ final class Controller {
       log("Desktop \(target) には元から窓があったので、workspace \(id) は次の候補へ")
       tracker.evict(id)
     }
-    log("workspace \(id) を作れる空き Desktop がありません (\(tracker.workspaces))")
+    log(
+      "workspace \(id) を作れる空き Desktop がありません"
+        + " (Desktop \(existing.map(String.init) ?? "?") 個 / \(tracker.workspaces))")
     return false
   }
 

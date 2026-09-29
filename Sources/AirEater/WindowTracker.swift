@@ -76,6 +76,19 @@ final class WindowTracker {
     workspaces.assign(id, to: desktop)
   }
 
+  /// macOS の Space の設定から、実在する Desktop の数を読み直す。
+  /// Desktop を足したり消したりしてもすぐ反映されるよう、行き先を選ぶたびに呼ぶ
+  @discardableResult
+  func reloadExistingDesktops() -> Int? {
+    let configuration = UserDefaults(suiteName: "com.apple.spaces")?
+      .object(forKey: "SpacesDisplayConfiguration")
+    let count = configuration.flatMap {
+      desktopCount(inSpacesConfiguration: ["SpacesDisplayConfiguration": $0])
+    }
+    workspaces.limitToExistingDesktops(count)
+    return count
+  }
+
   /// 確保した Desktop に元から窓があったので、id をそこから外す。
   func evict(_ id: Int) {
     workspaces.evict(id)
