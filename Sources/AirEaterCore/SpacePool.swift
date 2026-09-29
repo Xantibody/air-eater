@@ -33,6 +33,18 @@ public struct SpacePool: Sendable {
     occupied[desktop] = windows
   }
 
+  /// desktop で見えたと報告された窓に、既に別の Desktop の窓だと分かっている窓が混ざっているか。
+  /// 実機で一度、全 Space の窓が一斉に「画面に写っている」と報告される瞬間があり、それを数えると
+  /// 他の Desktop の窓が全部ここへ移ったように見えた。混ざっていれば、その観測は捨てる。
+  /// Mission Control で窓を 1 枚動かした直後も別の Desktop の窓が見えるので、2 枚以上で、かつ
+  /// 観測の半分以上を占めるときだけ疑う
+  public func isSuspect(desktop: Int, windows: Set<CGWindowID>) -> Bool {
+    let foreign = occupied.filter { $0.key != desktop }.values
+      .reduce(into: Set<CGWindowID>()) { $0.formUnion($1) }
+      .intersection(windows).count
+    return foreign >= 2 && foreign * 2 >= windows.count
+  }
+
   /// existing に無いウィンドウ (表示していない Desktop で閉じられたもの) を落とす。
   public mutating func retain(existing: Set<CGWindowID>) {
     for desktop in occupied.keys {

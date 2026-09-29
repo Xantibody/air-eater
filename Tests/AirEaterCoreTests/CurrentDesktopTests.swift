@@ -26,3 +26,12 @@ extension CurrentDesktopTests {
     #expect(currentDesktop(markers: Self.markers, onScreen: [100, 200]) == nil)
   }
 }
+
+extension CurrentDesktopTests {
+  // Mission Control のように全 Space を重ねて見せている間は、複数のマーカーが同時に写る。
+  // どれが今の Desktop か決められないので、プール外と同じく不明にする (実機で Desktop 2 に着いた
+  // 直後に Desktop 1 と判定し、全 Space の窓を Desktop 1 の窓として数えた)
+  @Test func severalMarkersOnScreenMeansUnknown() {
+    #expect(currentDesktop(markers: Self.markers, onScreen: [901, 902, 100]) == nil)
+  }
+}
