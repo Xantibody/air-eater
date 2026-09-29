@@ -198,6 +198,7 @@ final class Controller {
     case .newWorkspace: await openNewWorkspace()
     case .tile(let tile): tileFocusedWindow(tile)
     case .arrange: arrangeCurrentWorkspace()
+    case .close: closeFocusedWindow()
     }
   }
 

@@ -12,6 +12,8 @@ public enum Command: Equatable, Sendable {
   case tile(Tile)
   /// 今の workspace の窓を、数に合った macOS 標準の配置で並べ直す
   case arrange
+  /// フォーカス中の窓を閉じる (Hyprland の killactive)。アプリは終了しない
+  case close
 }
 
 /// 数字以外の Super+キー。hjkl は vim と同じ向き
@@ -23,6 +25,7 @@ private let namedCommands: [Int: Command] = [
   kVK_ANSI_J: .tile(.bottom),
   kVK_ANSI_K: .tile(.top),
   kVK_ANSI_L: .tile(.right),
+  kVK_ANSI_C: .close,
 ]
 
 /// Super+Shift+キー。Hyprland でも Shift 付きは「別の場所へ」の操作に当てることが多い
@@ -60,18 +63,19 @@ public func desktopSwitched(keyCode: CGKeyCode, flags: CGEventFlags) -> Int? {
 extension Command {
   /// テストや外部からの操作用に、1 行の文字列から操作を読む。
   /// 形は `workspace <N>` / `neighbor previous|next` / `terminal` / `new` / `tile <side>` /
-  /// `arrange`
+  /// `arrange` / `close`
   public init?(parsing line: String) {
     let words = line.split(separator: " ").map(String.init)
+    if words.count == 1, let command = singleWordCommands[words[0]] {
+      self = command
+      return
+    }
     switch (words.first, words.dropFirst().first, words.count) {
     case ("workspace", let number?, 2):
       guard let number = Int(number), number >= 1 else { return nil }
       self = .workspace(number)
     case ("neighbor", "previous", 2): self = .neighbor(.previous)
     case ("neighbor", "next", 2): self = .neighbor(.next)
-    case ("terminal", nil, 1): self = .openTerminal
-    case ("new", nil, 1): self = .newWorkspace
-    case ("arrange", nil, 1): self = .arrange
     case ("tile", let side?, 2):
       guard let tile = Tile.allCases.first(where: { "\($0)" == side }) else { return nil }
       self = .tile(tile)
@@ -79,3 +83,11 @@ extension Command {
     }
   }
 }
+
+/// 引数を取らない命令。
+private let singleWordCommands: [String: Command] = [
+  "terminal": .openTerminal,
+  "new": .newWorkspace,
+  "arrange": .arrange,
+  "close": .close,
+]

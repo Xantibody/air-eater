@@ -26,6 +26,7 @@ extension KeyCommandTests {
       (0x26, .tile(.bottom)),  // J
       (0x28, .tile(.top)),  // K
       (0x25, .tile(.right)),  // L
+      (0x08, .close),  // C
     ] as [(CGKeyCode, Command)])
   func optionKeyMapsToCommand(keyCode: CGKeyCode, expected: Command) {
     #expect(command(keyCode: keyCode, flags: .maskAlternate) == expected)

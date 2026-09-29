@@ -16,3 +16,16 @@ func focusedWindow(for purpose: String) -> (window: AXUIElement, appName: String
     return nil
   }
 }
+
+/// 相手のアプリのフォーカス中の窓を、閉じるボタンを押して閉じる (Hyprland の killactive)。
+/// 赤いボタンを押すのと同じなので、未保存の書類があればアプリが確認を出す。アプリは終了しない
+@MainActor
+func closeFocusedWindow() {
+  guard let (window, appName) = focusedWindow(for: "close") else { return }
+  guard case .success(let button) = element(window, kAXCloseButtonAttribute) else {
+    log("close → \(appName) の窓に閉じるボタンが無い")
+    return
+  }
+  let error = AXUIElementPerformAction(button, kAXPressAction as CFString)
+  log("close → \(appName) の窓の閉じるボタンを押した (AXError \(error.rawValue))")
+}
