@@ -47,7 +47,7 @@ func arrangeByFrames(_ arrangement: Arrangement) {
 /// 同じ frame の窓が 2 つあるときのために、既に使った窓は除く。
 /// 作られた直後の窓は CGWindowList の位置がまだ古いことがあり一致しないので、そのときは
 /// 同じプロセスの他の窓 (others) に当たらない候補が 1 つだけならそれにする
-private func axWindow(
+func axWindow(
   matching entry: WindowEntry, among others: [WindowEntry], excluding used: [AXUIElement]
 ) -> AXUIElement? {
   let app = AXUIElementCreateApplication(entry.pid)

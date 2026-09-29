@@ -168,3 +168,39 @@ func closeMovedFinderWindow() {
   pump(1)
   try? FileManager.default.removeItem(at: moveFolder)
 }
+
+// MARK: - 方向でフォーカスを移す
+
+/// Finder のフォーカス中の窓のタイトル。
+func finderFocusedWindowTitle() -> String? {
+  guard
+    let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
+      .first
+  else { return nil }
+  var window: CFTypeRef?
+  AXUIElementCopyAttributeValue(
+    AXUIElementCreateApplication(finder.processIdentifier), kAXFocusedWindowAttribute as CFString,
+    &window)
+  guard let window else { return nil }
+  var title: CFTypeRef?
+  AXUIElementCopyAttributeValue(
+    unsafeDowncast(window, to: AXUIElement.self), kAXTitleAttribute as CFString, &title)
+  return title as? String
+}
+
+/// focus を送ると、Finder のフォーカス中の窓が index 番目のフォルダの窓に変わること。
+func focusMoves(_ direction: String, toFolder index: Int) -> () throws -> Void {
+  {
+    let start = logLines.count
+    send("focus \(direction)")
+    try expect(waitFor("focus → \(direction) の窓", from: start), "focus が窓を選ばなかった")
+    let title = finderFolders[index].lastPathComponent
+    let deadline = Date(timeIntervalSinceNow: 2)
+    var focused: String?
+    repeat {
+      pump(0.1)
+      focused = finderFocusedWindowTitle()
+    } while focused != title && Date() < deadline
+    try expect(focused == title, "フォーカスが \(title) に移らなかった: \(focused ?? "なし")")
+  }
+}

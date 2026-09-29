@@ -230,6 +230,7 @@ final class Controller {
       tileFocusedWindow(tile)
     case .arrange: arrangeCurrentWorkspace()
     case .close: closeFocusedWindow()
+    case .focus(let direction): moveFocus(direction)
     }
   }
 

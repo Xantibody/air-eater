@@ -236,6 +236,9 @@ scenarios += [
     "Finder の窓 2 枚目で左と右に並ぶ",
     opensAndArranges(folder: 1, expected: [(1, .left), (0, .right)])
   ),
+  // 方向でフォーカスを移す (Option+Shift+H/J/K/L)。左が手前 (2 枚目) の状態から右へ、そして左へ戻る
+  ("focus right で右の Finder の窓 (1 枚目) にフォーカスが移る", focusMoves("right", toFolder: 0)),
+  ("focus left で左の Finder の窓 (2 枚目) に戻る", focusMoves("left", toFolder: 1)),
   ("close で手前の Finder の窓が閉じ、残りが画面全体に広がる", closesFrontFinderWindow),
   ("E2E が開いた Finder の窓を閉じる", { closeFinderWindows() }),
   // 純正の配置が無いアプリ (E2E 自身) の窓は、同じ形を自前の frame で作る
