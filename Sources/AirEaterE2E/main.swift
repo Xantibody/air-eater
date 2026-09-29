@@ -157,21 +157,26 @@ func manualSwitch(to desktop: Int) -> () throws -> Void {
 
 let tapWorks = tapSeesSyntheticKeys()
 
+// 使うのは Desktop 1 と 2 だけ。間に全画面アプリの Space が挟まっていてもよい
 var scenarios: [(String, () throws -> Void)] = [
-  ("workspace 1 で Desktop 1 に留まる", workspace(1, reaches: 1)),
-  ("空きを指す workspace 2 で Desktop 2 に着いて留まる", workspace(2, reaches: 2)),
-  ("workspace 1 で Desktop 1 に戻って留まる", workspace(1, reaches: 1)),
-  ("もう一度 workspace 2 で Desktop 2 に留まる", workspace(2, reaches: 2)),
-  ("workspace 1 で Desktop 1 に戻る", workspace(1, reaches: 1)),
+  ("workspace 1 で Desktop 1 に留まる", workspace(1, reaches: 1))
 ]
+// air-eater がまだ行っていない Desktop 2 を、手の Ctrl+2 で覚えられるか。
+// Desktop 2 に一度でも air-eater で行くとマーカーが付くので、それより前に回す
 if tapWorks {
   scenarios += [
-    ("手の Ctrl+3 で着いた Desktop 3 を 3 番だと分かる", manualSwitch(to: 3)),
+    ("手の Ctrl+2 で着いた Desktop 2 を 2 番だと分かる", manualSwitch(to: 2)),
     ("手の Ctrl+1 で Desktop 1 に戻る", manualSwitch(to: 1)),
   ]
 } else {
   print("… 送ったキーがキー監視に見えない環境なので、手の Ctrl+数字 のシナリオは飛ばす")
 }
+scenarios += [
+  ("空きを指す workspace 2 で Desktop 2 に着いて留まる", workspace(2, reaches: 2)),
+  ("workspace 1 で Desktop 1 に戻って留まる", workspace(1, reaches: 1)),
+  ("もう一度 workspace 2 で Desktop 2 に留まる", workspace(2, reaches: 2)),
+  ("workspace 1 で Desktop 1 に戻る", workspace(1, reaches: 1)),
+]
 
 // MARK: - 実行
 
