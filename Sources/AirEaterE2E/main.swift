@@ -239,7 +239,7 @@ scenarios += [
   ("close で手前の Finder の窓が閉じ、残りが画面全体に広がる", closesFrontFinderWindow),
   ("E2E が開いた Finder の窓を閉じる", { closeFinderWindows() }),
   // 純正の配置が無いアプリ (E2E 自身) の窓は、同じ形を自前の frame で作る
-  ("純正の配置が無い窓 1 枚目は自前の frame で画面全体に広がる", opensAndArrangesByFrames),
+  ("純正の配置が無い窓 1 枚目は通知で 1 秒以内に気づき、自前の frame で画面全体に広がる", opensAndArrangesByFrames),
   ("純正の配置が無い窓 2 枚目で自前の frame で左と右に並ぶ", opensAndArrangesByFrames),
   ("純正の配置が無い窓 3 枚目で自前の frame で左と 4 分割に並ぶ", opensAndArrangesByFrames),
   ("自前の frame で並べた E2E の窓を閉じる", { closeFallbackWindows() }),

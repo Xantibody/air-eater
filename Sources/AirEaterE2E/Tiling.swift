@@ -96,9 +96,13 @@ func opensAndArrangesByFrames() throws {
     window.makeKeyAndOrderFront(nil)
     NSApplication.shared.activate(ignoringOtherApps: true)
     let count = fallbackWindows.count
+    let shown = Date()
     try expect(
       waitFor("自前の frame で \(count) 枚を並べた", from: start, timeout: .seconds(4)),
       "自前の frame で \(count) 枚を並べたと air-eater が言わなかった")
+    // 窓の生成は AXObserver で拾うので、定期的な走査 (2 秒) を待たずに気づくはず
+    let latency = Date().timeIntervalSince(shown)
+    try expect(latency < 1, "窓が増えたと気づくのに \(latency) 秒かかった (通知でなく走査で拾った)")
     guard let screen = window.screen ?? NSScreen.main,
       let arrangement = Arrangement(windowCount: count)
     else { throw Failure(description: "画面か配置が取れない") }

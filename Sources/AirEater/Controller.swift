@@ -14,6 +14,7 @@ final class Controller {
   private let keyTap = KeyTap()
   private let commandInput = CommandInput()
   private let markers = Markers()
+  private let windowEvents = WindowEvents()
   private let tracker: WindowTracker
   private var refreshTimer: Timer?
   /// 手で押された Ctrl+数字。直後に Space が変われば、そこがその番号の Desktop
@@ -84,9 +85,12 @@ final class Controller {
       let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
       log("前面のアプリ → \(app?.localizedName ?? "?")")
     }
-    // AIDEV-NOTE: PoC ではウィンドウの生成・破棄を AXObserver で購読せず、1 秒ごとの走査で拾う。
-    // 起動直後のウィンドウが workspace に数えられるまで最大 1 秒遅れる
-    refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+    // 窓の生成・破棄は AXObserver とアプリの起動・終了の通知で拾い、すぐ観測し直す
+    windowEvents.onChange = { [weak self] in self?.tracker.refresh() }
+    windowEvents.start()
+    // AIDEV-NOTE: AX の通知は欠けることがある (Electron、購読に失敗したアプリ) ので、
+    // 定期的な走査を保険として残す。通知が来る限り、この間隔は体感に影響しない
+    refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated { self?.tracker.refresh() }
     }
   }
