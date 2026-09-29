@@ -23,7 +23,8 @@ func arrangeByFrames(_ arrangement: Arrangement) {
 
   var used: [AXUIElement] = []
   for (entry, frame) in zip(entries, frames) {
-    guard let window = axWindow(matching: entry, excluding: used) else {
+    let others = entries.filter { $0.pid == entry.pid && $0.id != entry.id }
+    guard let window = axWindow(matching: entry, among: others, excluding: used) else {
       log("\(arrangement) → 窓 \(entry.id) に当たる AX の窓が見つからない")
       continue
     }
@@ -41,21 +42,34 @@ func arrangeByFrames(_ arrangement: Arrangement) {
   log("\(arrangement) → 自前の frame で \(entries.count) 枚を並べた")
 }
 
-/// entry と同じ位置・大きさにある、そのプロセスの AX の窓。
+/// entry に当たる、そのプロセスの AX の窓。
 /// AX の窓と CGWindowList の窓を結ぶ公開 API は無いので、frame の一致で結ぶ。
-/// 同じ frame の窓が 2 つあるときのために、既に使った窓は除く
-private func axWindow(matching entry: WindowEntry, excluding used: [AXUIElement]) -> AXUIElement? {
+/// 同じ frame の窓が 2 つあるときのために、既に使った窓は除く。
+/// 作られた直後の窓は CGWindowList の位置がまだ古いことがあり一致しないので、そのときは
+/// 同じプロセスの他の窓 (others) に当たらない候補が 1 つだけならそれにする
+private func axWindow(
+  matching entry: WindowEntry, among others: [WindowEntry], excluding used: [AXUIElement]
+) -> AXUIElement? {
   let app = AXUIElementCreateApplication(entry.pid)
   guard let windows = attribute(app, kAXWindowsAttribute, as: [AXUIElement].self) else {
     return nil
   }
-  return windows.first { window in
-    guard !used.contains(where: { CFEqual($0, window) }),
-      let origin: CGPoint = value(window, kAXPositionAttribute, .cgPoint, .zero),
-      let size: CGSize = value(window, kAXSizeAttribute, .cgSize, .zero)
-    else { return false }
-    return nearlyEqual(CGRect(origin: origin, size: size), entry.bounds)
+  let candidates = windows.filter { window in !used.contains { CFEqual($0, window) } }
+    .compactMap { window in axFrame(of: window).map { (window: window, frame: $0) } }
+  if let exact = candidates.first(where: { nearlyEqual($0.frame, entry.bounds) }) {
+    return exact.window
   }
+  let unclaimed = candidates.filter { candidate in
+    !others.contains { nearlyEqual(candidate.frame, $0.bounds) }
+  }
+  return unclaimed.count == 1 ? unclaimed[0].window : nil
+}
+
+private func axFrame(of window: AXUIElement) -> CGRect? {
+  guard let origin: CGPoint = value(window, kAXPositionAttribute, .cgPoint, .zero),
+    let size: CGSize = value(window, kAXSizeAttribute, .cgSize, .zero)
+  else { return nil }
+  return CGRect(origin: origin, size: size)
 }
 
 /// 座標の丸めで 1〜2 pt ずれることがあるので、それは同じとみなす
