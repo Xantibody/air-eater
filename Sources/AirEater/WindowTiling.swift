@@ -4,13 +4,19 @@ import AppKit
 /// 最前面のアプリのフォーカス中ウィンドウを、そのウィンドウがある画面の tile に寄せる。
 @MainActor
 func tileFocusedWindow(_ tile: Tile) {
-  let system = AXUIElementCreateSystemWide()
-  guard let app = element(system, kAXFocusedApplicationAttribute) else {
-    log("\(tile) → フォーカス中のアプリが取れない (アクセシビリティ権限を確認)")
+  // 前面のアプリは NSWorkspace から PID で取る。システム全体の AX 要素に聞くと、
+  // 失敗したときにアプリ側と窓側のどちらで詰まったのかログから分からない
+  guard let frontmost = NSWorkspace.shared.frontmostApplication else {
+    log("\(tile) → 前面のアプリが無い")
     return
   }
-  guard let window = element(app, kAXFocusedWindowAttribute) else {
-    log("\(tile) → フォーカス中の窓が無い")
+  let appName = frontmost.localizedName ?? "?"
+  let app = AXUIElementCreateApplication(frontmost.processIdentifier)
+  let window: AXUIElement
+  switch element(app, kAXFocusedWindowAttribute) {
+  case .success(let focused): window = focused
+  case .failure(let error):
+    log("\(tile) → \(appName) のフォーカス中の窓が取れない (AXError \(error.code.rawValue))")
     return
   }
   guard let primary = NSScreen.screens.first else { return }
@@ -18,15 +24,19 @@ func tileFocusedWindow(_ tile: Tile) {
   let screen = screen(containing: window, primaryHeight: primary.frame.height) ?? primary
   let frame = accessibilityFrame(
     fromCocoa: tile.frame(in: screen.visibleFrame), primaryScreenHeight: primary.frame.height)
-  log("\(tile) → \(screen.localizedName) の \(frame) (AX 座標) に寄せる")
+  log("\(tile) → \(appName) の窓を \(screen.localizedName) の \(frame) (AX 座標) に寄せる")
 
   // 最小サイズを持つアプリは 1 回目の size を丸めて返す。position を決めた後に
   // もう一度 size を書くと、1 回目で弾かれた分を吸収できる
-  set(window, kAXSizeAttribute, frame.size)
-  set(window, kAXPositionAttribute, frame.origin)
-  set(window, kAXSizeAttribute, frame.size)
+  let results = [
+    set(window, kAXSizeAttribute, frame.size),
+    set(window, kAXPositionAttribute, frame.origin),
+    set(window, kAXSizeAttribute, frame.size),
+  ]
+  if let failure = results.first(where: { $0 != .success }) {
+    log("\(tile) → \(appName) の窓の frame を書けなかった (AXError \(failure.rawValue))")
+  }
 }
-
 private func screen(containing window: AXUIElement, primaryHeight: CGFloat) -> NSScreen? {
   guard
     let origin: CGPoint = value(window, kAXPositionAttribute, .cgPoint, .zero),
@@ -38,12 +48,16 @@ private func screen(containing window: AXUIElement, primaryHeight: CGFloat) -> N
   return NSScreen.screens.first { $0.frame.contains(center) }
 }
 
-private func element(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+private func element(
+  _ element: AXUIElement, _ attribute: String
+) -> Result<AXUIElement, AXFailure> {
   var value: CFTypeRef?
-  guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
-    let value, CFGetTypeID(value) == AXUIElementGetTypeID()
-  else { return nil }
-  return unsafeDowncast(value, to: AXUIElement.self)
+  let error = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+  guard error == .success else { return .failure(AXFailure(code: error)) }
+  guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
+    return .failure(AXFailure(code: .failure))
+  }
+  return .success(unsafeDowncast(value, to: AXUIElement.self))
 }
 
 private func value<T: BitwiseCopyable>(
@@ -58,14 +72,19 @@ private func value<T: BitwiseCopyable>(
   return result
 }
 
-private func set(_ element: AXUIElement, _ attribute: String, _ size: CGSize) {
+private func set(_ element: AXUIElement, _ attribute: String, _ size: CGSize) -> AXError {
   var size = size
-  guard let value = AXValueCreate(.cgSize, &size) else { return }
-  AXUIElementSetAttributeValue(element, attribute as CFString, value)
+  guard let value = AXValueCreate(.cgSize, &size) else { return .failure }
+  return AXUIElementSetAttributeValue(element, attribute as CFString, value)
 }
 
-private func set(_ element: AXUIElement, _ attribute: String, _ point: CGPoint) {
+private func set(_ element: AXUIElement, _ attribute: String, _ point: CGPoint) -> AXError {
   var point = point
-  guard let value = AXValueCreate(.cgPoint, &point) else { return }
-  AXUIElementSetAttributeValue(element, attribute as CFString, value)
+  guard let value = AXValueCreate(.cgPoint, &point) else { return .failure }
+  return AXUIElementSetAttributeValue(element, attribute as CFString, value)
+}
+
+/// Result に載せるための AXError の包み。
+private struct AXFailure: Error {
+  let code: AXError
 }
