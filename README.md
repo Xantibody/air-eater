@@ -21,18 +21,15 @@ macOS は新しいウィンドウを必ず今いる Space に開く。先に Spa
 
 Space は起動前に手で 9 個作っておく。macOS は Space を勝手に削除しないので、固定プールとして安定する。「新規 workspace」は「プール内の空き Space へ行く」操作になる。
 
-### 論理番号は保存せず導出する
+### workspace 番号は Hyprland と同じ固定の ID
 
-物理 Desktop 1–9 は固定のまま。ウィンドウがある Desktop だけを並べたものを Hyprland 式の論理番号とし、毎回そこから計算する。
+workspace の番号は固定の ID で、詰めたり振り直したりしない (Hyprland と同じ)。air-eater は workspace ID と物理 Desktop の対応表を持つ。
 
-```swift
-let pool: [Int]                      // [1,2,...,9] 物理 Desktop 番号
-var occupied: [Int: Set<WindowID>]   // 物理番号 → そこに属するウィンドウ
-var active: [Int] { pool.filter { !(occupied[$0]?.isEmpty ?? true) } }
-// 論理 N → 物理 = active[N-1]
-```
+- まだ無い番号を指すと、空いている Desktop を 1 つ確保してその番号の workspace を作る。1, 2 しか無いときに Option+5 を押すと 1, 2, 5 になる
+- 空のまま離れた workspace は消え、Desktop は空きに戻る。他の番号はそのまま
+- 窓のある Desktop と表示中の Desktop には番号を自動で付ける。Desktop 番号と同じ番号が空いていればそれを使う
 
-Desktop が空になれば `active` から落ち、後ろの番号が自然に繰り上がる。
+まだ中身を見ていない Desktop も空き候補になるので、着いて窓があれば、その Desktop には自分の番号を付けて次の候補を探す。
 
 ### 現在の Space はマーカーウィンドウで観測する
 
@@ -46,9 +43,9 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 
 | 操作 | キー | 実装 |
 | --- | --- | --- |
-| workspace N へ移動 | Option+1…9 | `active[N-1]` の物理番号に対応する Ctrl+数字 を送出。N が workspace 数を超えたら空き Desktop へ |
-| 隣の workspace へ移動 | Option+[ / ] | 空き Desktop を飛ばした隣の workspace の Ctrl+数字 を送出 |
-| 新しい workspace で端末を起動 | Option+Return | 最小の空き Desktop へ切り替えてから Ghostty (無ければ Terminal) を新しいインスタンスで起動 |
+| workspace N へ移動 | Option+1…9 | N の workspace がある Desktop の Ctrl+数字 を送出。無ければ空き Desktop に作る |
+| 隣の workspace へ移動 | Option+[ / ] | 番号順で隣の workspace へ。端では反対の端へ折り返す |
+| 新しい workspace で端末を起動 | Option+Return | 使われていない一番小さい番号の workspace を作り、Ghostty (無ければ Terminal) を新しいインスタンスで起動 |
 | 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
 | ウィンドウを別 workspace へ移動 | — | v1 では非対応 |
 
@@ -59,7 +56,8 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 1. Mission Control で Desktop を 9 個作る
 2. システム設定 ▸ キーボード ▸ キーボードショートカット ▸ Mission Control で「デスクトップ 1〜9 へ切り替え」(Ctrl+1…9) を有効にする
 3. システム設定 ▸ デスクトップと Dock で「最新の使用状況に基づいて操作スペースを並べ替える」を OFF にする
-4. 初回起動時にアクセシビリティ権限を許可する
+4. 同じ画面で「アプリケーションの切り替えで、アプリケーションのウインドウが開いている操作スペースに移動」を OFF にする。ON だと、空の Desktop に着いたとき前面になった別のアプリ (隣の全画面アプリなど) の Space へ移されてしまう
+5. 初回起動時にアクセシビリティ権限を許可する
 
 ## 開発
 
