@@ -7,6 +7,8 @@ macOS の Space をあらかじめ確保した固定プールとして扱い、H
 - private API: 使わない
 - SIP: 変更しない
 
+設計思想は [docs/design-philosophy.md](docs/design-philosophy.md)、コードとログの言葉は [docs/concepts.md](docs/concepts.md) にある。
+
 ## しくみ
 
 ### ウィンドウを Space 間で動かさない
