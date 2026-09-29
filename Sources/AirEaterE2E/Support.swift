@@ -85,3 +85,21 @@ func expectedAXFrame(_ tile: Tile?) -> CGRect {
     return accessibilityFrame(fromCocoa: cocoa, primaryScreenHeight: screen.frame.height)
   }
 }
+
+/// プロセス pid の最初の窓。
+func firstWindow(ofProcess pid: pid_t) -> AXUIElement? {
+  var windows: CFTypeRef?
+  AXUIElementCopyAttributeValue(
+    AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &windows)
+  return (windows as? [AXUIElement])?.first
+}
+
+/// 名前が name のアプリで、窓を持っているプロセス。
+func processes(owningWindowsNamed name: String) -> Set<pid_t> {
+  let windows = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]] ?? []
+  return Set(
+    windows.compactMap { info in
+      info[kCGWindowOwnerName as String] as? String == name
+        ? info[kCGWindowOwnerPID as String] as? pid_t : nil
+    })
+}

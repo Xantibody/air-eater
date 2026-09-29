@@ -298,6 +298,73 @@ scenarios += [
   ("workspace 1 に戻る", workspace(1, reaches: 1)),
 ]
 
+// MARK: - 端末を開く (Option+Return / Option+Shift+Return)
+
+/// E2E を始める前から窓を持っている端末のプロセス。これ以外を E2E が起動したものとみなし、
+/// 最後に終了させる。Nix の kitty は NSRunningApplication では pid が -1 になって当てにならない
+/// ので、窓の持ち主 (CGWindowList) で見分ける
+let terminalName = "kitty"
+let terminalsBeforeE2E = processes(owningWindowsNamed: terminalName)
+
+/// E2E が起動した端末の pid を、起動した順 (pid の昇順) に。
+func launchedTerminals() -> [pid_t] {
+  processes(owningWindowsNamed: terminalName).subtracting(terminalsBeforeE2E).sorted()
+}
+
+/// command を送って端末が 1 つ起動し、Desktop の窓が count 枚になり、
+/// expected の各端末 (起動した順の番号) がその位置 (nil なら画面全体) に並ぶこと。
+func launchesTerminal(
+  _ command: String, count: Int, expected: [(Int, Tile?)]
+) -> () throws -> Void {
+  {
+    let start = logLines.count
+    send(command)
+    try expect(
+      waitFor("新しいインスタンスで起動した", from: start, timeout: .seconds(5)), "端末が起動しなかった")
+    try expect(
+      waitFor("窓が \(count) 枚になった", from: start, timeout: .seconds(5)),
+      "窓が \(count) 枚になったと air-eater が気づかなかった")
+    let deadline = Date(timeIntervalSinceNow: 4)
+    var mismatches: [String] = []
+    repeat {
+      pump(0.1)
+      let terminals = launchedTerminals()
+      mismatches = expected.compactMap { index, tile in
+        let frame =
+          terminals.indices.contains(index)
+          ? firstWindow(ofProcess: terminals[index]).flatMap(axFrame(of:)) : nil
+        let want = expectedAXFrame(tile)
+        return frame.map { nearlyEqual($0, want) } == true
+          ? nil : "端末 \(index + 1): \(frame.map { "\($0)" } ?? "窓が無い") (期待 \(want))"
+      }
+    } while !mismatches.isEmpty && Date() < deadline
+    try expect(mismatches.isEmpty, "標準の配置で並ばなかった: \(mismatches)")
+  }
+}
+
+/// E2E が起動した端末を終わらせる。ユーザーが使っている端末には触らない
+func quitLaunchedTerminals() {
+  for pid in launchedTerminals() { kill(pid, SIGTERM) }
+  pump(1.5)
+}
+
+scenarios += [
+  ("端末を試すため空の Desktop 2 に workspace 2 を作る", workspace(2, reaches: 2)),
+  (
+    "terminal で今の workspace に端末が開き、画面全体に広がる",
+    launchesTerminal("terminal", count: 1, expected: [(0, nil)])
+  ),
+  (
+    "もう一度 terminal で 2 つ目が開き、左と右に並ぶ",
+    launchesTerminal("terminal", count: 2, expected: [(1, .left), (0, .right)])
+  ),
+  ("E2E が起動した端末を終わらせる", { quitLaunchedTerminals() }),
+  ("workspace 1 に戻る", workspace(1, reaches: 1)),
+  ("new で新しい workspace に端末が開き、画面全体に広がる", launchesTerminal("new", count: 1, expected: [(0, nil)])),
+  ("E2E が起動した端末を終わらせる", { quitLaunchedTerminals() }),
+  ("workspace 1 に戻って終わる", workspace(1, reaches: 1)),
+]
+
 // MARK: - 実行
 
 try process.run()
