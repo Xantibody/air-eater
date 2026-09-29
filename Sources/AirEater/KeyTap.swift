@@ -58,6 +58,12 @@ final class KeyTap {
       return true
     }
 
+    // 入力内容がすべて出るので、キー監視そのものを疑うときだけ有効にする
+    if logsEveryKey {
+      log(
+        "キー keyCode=\(key.keyCode) flags=0x\(String(key.flags.rawValue, radix: 16)) repeat=\(key.isRepeat)"
+      )
+    }
     if let action = command(keyCode: key.keyCode, flags: key.flags) {
       // 押しっぱなしの自動リピートでは操作を繰り返さない。どちらもアプリには渡さない
       if !key.isRepeat { onCommand(action) }
@@ -69,6 +75,8 @@ final class KeyTap {
     return true
   }
 }
+
+private let logsEveryKey = ProcessInfo.processInfo.environment["AIR_EATER_LOG_KEYS"] == "1"
 
 private struct Key: Sendable {
   let keyCode: CGKeyCode

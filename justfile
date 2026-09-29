@@ -27,3 +27,8 @@ check:
     just lint
     just build
     just test
+
+# 実機で Desktop を切り替えて確かめる。Desktop が 2 個以上あり Ctrl+1…9 が有効な Mac で、手元でだけ回す
+e2e:
+    swift build
+    "$(swift build --show-bin-path)/AirEaterE2E" "$(swift build --show-bin-path)/air-eater"

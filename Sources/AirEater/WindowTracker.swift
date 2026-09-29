@@ -31,11 +31,15 @@ final class WindowTracker {
     }
     pool.retain(existing: managedWindows(in: windowList(.optionAll), excludingProcess: getpid()))
 
+    let place = current.map { "Desktop \($0)" } ?? "不明 (マーカーの無い Space)"
+    summary = "現在地 \(place) / プール \(pool.description) / 見えている窓 \(names(of: visible, in: onScreen))"
     // 1 秒ごとに呼ばれるので、変わったときだけ出す
     guard before != (current, pool.description) else { return }
-    let place = current.map { "Desktop \($0)" } ?? "不明 (マーカーの無い Space)"
-    log("現在地 \(place) / プール \(pool.description) / 見えている窓 \(names(of: visible, in: onScreen))")
+    log(summary)
   }
+
+  /// 最後に refresh したときの現在地・プール・見えている窓。
+  private(set) var summary = ""
 
   private func names(of windows: Set<CGWindowID>, in windowList: [[String: Any]]) -> String {
     let entries = windowList.compactMap { info -> String? in

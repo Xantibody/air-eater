@@ -12,6 +12,7 @@ private let manualSwitchWindow: Duration = .milliseconds(1500)
 @MainActor
 final class Controller {
   private let keyTap = KeyTap()
+  private let commandInput = CommandInput()
   private let markers = Markers()
   private let tracker: WindowTracker
   private var refreshTimer: Timer?
@@ -32,9 +33,18 @@ final class Controller {
     tracker.refresh()
 
     observeWindows()
-    guard startKeyTap() else {
+    commandInput.onCommand = { [weak self] command in
+      guard let self else { return }
+      Task { await self.perform(command) }
+    }
+    commandInput.onStatus = { [weak self] in
+      guard let self else { return }
+      tracker.refresh()
+      log("状態 \(tracker.summary)")
+    }
+    commandInput.start()
+    if !startKeyTap() {
       log("キー監視を始められませんでした。アクセシビリティ権限を確認して再起動してください")
-      return
     }
     log("準備できました")
   }
