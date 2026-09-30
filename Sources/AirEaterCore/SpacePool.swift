@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// 固定した物理 Desktop のプールと、各 Desktop に属するウィンドウ。
-/// Hyprland 式の論理番号は保存せず、ここから毎回導出する。
+/// workspace の番号付けは Workspaces が持ち、ここは窓の所属だけを追う。
 public struct SpacePool: Sendable {
   public let desktops: [Int]
   private var occupied: [Int: Set<CGWindowID>] = [:]
@@ -10,34 +10,18 @@ public struct SpacePool: Sendable {
     self.desktops = Array(desktops)
   }
 
-  /// ウィンドウがある物理 Desktop。論理番号 N は active[N-1]。
+  /// ウィンドウがある物理 Desktop。
   public var active: [Int] {
     desktops.filter { !(occupied[$0]?.isEmpty ?? true) }
   }
 
-  /// 新しい workspace として使う、番号がいちばん小さい空き Desktop。
-  public var firstEmpty: Int? {
-    desktops.first { occupied[$0]?.isEmpty ?? true }
-  }
-
-  /// 論理番号 workspace (1 始まり) に当たる物理 Desktop。
-  /// 今ある workspace の数を超えた番号は、新しい workspace として空き Desktop を返す。
-  public func desktop(forWorkspace workspace: Int) -> Int? {
-    let active = active
-    guard workspace >= 1 else { return nil }
-    return workspace <= active.count ? active[workspace - 1] : firstEmpty
+  /// desktop を表示して、窓が無いと確かめたか。まだ見ていない Desktop は false。
+  public func isObservedEmpty(_ desktop: Int) -> Bool {
+    occupied[desktop]?.isEmpty ?? false
   }
 
   public enum Direction: Sendable {
     case previous, next
-  }
-
-  /// current から見て隣の workspace がある物理 Desktop。空き Desktop は飛ばす。
-  public func desktop(nextTo current: Int, direction: Direction) -> Int? {
-    switch direction {
-    case .next: active.first { $0 > current }
-    case .previous: active.last { $0 < current }
-    }
   }
 
   /// desktop を表示中に見えたウィンドウで、その Desktop の所属を置き換える。
@@ -49,10 +33,33 @@ public struct SpacePool: Sendable {
     occupied[desktop] = windows
   }
 
+  /// desktop で見えたと報告された窓に、既に別の Desktop の窓だと分かっている窓が混ざっているか。
+  /// 実機で一度、全 Space の窓が一斉に「画面に写っている」と報告される瞬間があり、それを数えると
+  /// 他の Desktop の窓が全部ここへ移ったように見えた。混ざっていれば、その観測は捨てる。
+  /// Mission Control で窓を 1 枚動かした直後も別の Desktop の窓が見えるので、2 枚以上で、かつ
+  /// 観測の半分以上を占めるときだけ疑う
+  public func isSuspect(desktop: Int, windows: Set<CGWindowID>) -> Bool {
+    let foreign = occupied.filter { $0.key != desktop }.values
+      .reduce(into: Set<CGWindowID>()) { $0.formUnion($1) }
+      .intersection(windows).count
+    return foreign >= 2 && foreign * 2 >= windows.count
+  }
+
   /// existing に無いウィンドウ (表示していない Desktop で閉じられたもの) を落とす。
   public mutating func retain(existing: Set<CGWindowID>) {
     for desktop in occupied.keys {
       occupied[desktop]?.formIntersection(existing)
     }
+  }
+}
+
+extension SpacePool: CustomStringConvertible {
+  /// ログ用。観測済みの Desktop だけを "1:{10,11} 2:{}" の形で並べる。
+  public var description: String {
+    desktops.compactMap { desktop in
+      occupied[desktop].map { windows in
+        "\(desktop):{\(windows.sorted().map(String.init).joined(separator: ","))}"
+      }
+    }.joined(separator: " ")
   }
 }

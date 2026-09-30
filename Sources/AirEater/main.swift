@@ -5,12 +5,18 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
 if !requestAccessibilityPermission() {
-  print("air-eater: アクセシビリティ権限がありません。システム設定で許可してから再起動してください")
+  log("アクセシビリティ権限がありません。システム設定で許可してから再起動してください")
 }
 // 「最新の使用状況に基づいて操作スペースを並べ替える」が ON だと物理 Desktop 番号が裏で入れ替わる。
 // キーが無いときは既定の ON
-if UserDefaults(suiteName: "com.apple.dock")?.object(forKey: "mru-spaces") as? Bool ?? true {
-  print("air-eater: システム設定 ▸ デスクトップと Dock ▸「最新の使用状況に基づいて操作スペースを並べ替える」を OFF にしてください")
+let dock = UserDefaults(suiteName: "com.apple.dock")
+if dock?.object(forKey: "mru-spaces") as? Bool ?? true {
+  log("システム設定 ▸ デスクトップと Dock ▸「最新の使用状況に基づいて操作スペースを並べ替える」を OFF にしてください")
+}
+// これが ON だと、空の Desktop に着いたとき前面になった別のアプリ (実機では隣の全画面 ChatGPT) の
+// Space へ macOS が移してしまう。キーが無いときは既定の ON
+if dock?.object(forKey: "workspaces-auto-swoosh") as? Bool ?? true {
+  log("システム設定 ▸ デスクトップと Dock ▸「アプリケーションの切り替えで、アプリケーションのウインドウが開いている操作スペースに移動」を OFF にしてください")
 }
 
 let controller = Controller()

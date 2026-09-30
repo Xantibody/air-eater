@@ -7,11 +7,13 @@ macOS の Space をあらかじめ確保した固定プールとして扱い、H
 - private API: 使わない
 - SIP: 変更しない
 
+設計思想は [docs/design-philosophy.md](docs/design-philosophy.md)、コードとログの言葉は [docs/concepts.md](docs/concepts.md) にある。
+
 ## しくみ
 
 ### ウィンドウを Space 間で動かさない
 
-既存ウィンドウを別の Space へ移す公開 API は無い。そこで `movetoworkspace` は v1 の仕様から外し、代わりに「新しい workspace でアプリを開く」を入り口にする。
+既存ウィンドウを別の Space へ移す公開 API は無い。そこで「新しい workspace でアプリを開く」を入り口にし、窓の移動は使う人が Option+Shift+数字 を押したときにだけ行う (タイトルバーを掴んだまま Ctrl+数字 を送る、脆いが公開 API だけの手法)。自動では窓を動かさない。
 
 macOS は新しいウィンドウを必ず今いる Space に開く。先に Space を切り替えてから起動すれば、ウィンドウは最初から目的の workspace に生まれる。
 
@@ -21,22 +23,38 @@ macOS は新しいウィンドウを必ず今いる Space に開く。先に Spa
 
 Space は起動前に手で 9 個作っておく。macOS は Space を勝手に削除しないので、固定プールとして安定する。「新規 workspace」は「プール内の空き Space へ行く」操作になる。
 
-### 論理番号は保存せず導出する
+### workspace 番号は Hyprland と同じ固定の ID
 
-物理 Desktop 1–9 は固定のまま。ウィンドウがある Desktop だけを並べたものを Hyprland 式の論理番号とし、毎回そこから計算する。
+workspace の番号は固定の ID で、詰めたり振り直したりしない (Hyprland と同じ)。air-eater は workspace ID と物理 Desktop の対応表を持つ。
 
-```swift
-let pool: [Int]                      // [1,2,...,9] 物理 Desktop 番号
-var occupied: [Int: Set<WindowID>]   // 物理番号 → そこに属するウィンドウ
-var active: [Int] { pool.filter { !(occupied[$0]?.isEmpty ?? true) } }
-// 論理 N → 物理 = active[N-1]
-```
+- まだ無い番号を指すと、空いている Desktop を 1 つ確保してその番号の workspace を作る。1, 2 しか無いときに Option+5 を押すと 1, 2, 5 になる
+- 空のまま離れた workspace は消え、Desktop は空きに戻る。他の番号はそのまま
+- 窓のある Desktop と表示中の Desktop には番号を自動で付ける。Desktop 番号と同じ番号が空いていればそれを使う
 
-Desktop が空になれば `active` から落ち、後ろの番号が自然に繰り上がる。
+まだ中身を見ていない Desktop も空き候補になるので、着いて窓があれば、その Desktop には自分の番号を付けて次の候補を探す。
 
 ### 現在の Space はマーカーウィンドウで観測する
 
-現在の Space を返す公開 API は無い。起動時に各 Space へ 1×1 の透明ウィンドウを置き、`CGWindowListCopyWindowInfo(.optionOnScreenOnly, …)` に写ったマーカーで現在地を決める。`NSWorkspaceActiveSpaceDidChangeNotification` を契機に再評価するので、トラックパッドで直接切り替えても状態が追従する。
+現在の Space を返す公開 API は無い。air-eater が Ctrl+数字 で Desktop に着いたとき、その Space に 1×1 の透明ウィンドウ (マーカー) を置き、`CGWindowListCopyWindowInfo(.optionOnScreenOnly, …)` に写ったマーカーで現在地を決める。`NSWorkspaceActiveSpaceDidChangeNotification` を契機に再評価するので、マーカーを置いた Desktop 同士ならトラックパッドで直接切り替えても状態が追従する。
+
+起動時に全 Desktop を巡回することはしない。起動時は Desktop 1 にだけ行き、他の Desktop は初めて air-eater で移動したときにプールへ入る。Desktop やショートカットを後から足しても、再起動せずにそのまま使える。
+
+### 自動タイルは macOS 標準の配置に任せる
+
+窓の並べ方は自前で計算せず、macOS 15 以降の各アプリにある「ウインドウ ▸ 移動とサイズ変更」の標準の配置を使う。今いる Desktop の窓の数が変わったら、前面のアプリのメニューから数に合った配置を Accessibility API で押す。
+
+| 窓の数 | 標準の配置 |
+| --- | --- |
+| 1 | 画面全体に表示 |
+| 2 | 左と右 |
+| 3 | 左と4分割 |
+| 4 | 4分割 |
+| 5 以上 | 並べない |
+
+- 項目名は言語で変わるので、ショートカットの属性 (キーと修飾キーの組) で項目を探す
+- 合成したショートカット (Fn+Ctrl+Shift+← など) は実機で効かなかったので、メニュー項目を直接押す
+- 標準のウインドウメニューを持たないアプリ (Electron、Qt など) の窓は、同じ 4 つの形を自前で計算した frame で並べる。形はこの 4 つに限り、独自のレイアウトは持たない
+- 初めて見た Desktop の窓は並べ直さない。窓の数が変わったときだけ動く
 
 ## キーバインド
 
@@ -44,20 +62,29 @@ Super には Option (⌥) を使う。Cmd+数字 はブラウザのタブ切り�
 
 | 操作 | キー | 実装 |
 | --- | --- | --- |
-| workspace N へ移動 | Option+1…9 | `active[N-1]` の物理番号に対応する Ctrl+数字 を送出。N が workspace 数を超えたら空き Desktop へ |
-| 隣の workspace へ移動 | Option+[ / ] | 空き Desktop を飛ばした隣の workspace の Ctrl+数字 を送出 |
-| 新しい workspace で端末を起動 | Option+Return | 最小の空き Desktop へ切り替えてから Ghostty (無ければ Terminal) を新しいインスタンスで起動 |
+| workspace N へ移動 | Option+1…9 | N の workspace がある Desktop の Ctrl+数字 を送出。無ければ空き Desktop に作る |
+| 隣の workspace へ移動 | Option+[ / ] | 番号順で隣の workspace へ。端では反対の端へ折り返す |
+| 今の workspace に端末を開く | Option+Return | kitty (無ければ Ghostty、Terminal) を新しいインスタンスで起動。窓が増えるので自動タイルが並べる |
+| 新しい workspace に端末を開く | Option+Shift+Return | 使われていない一番小さい番号の workspace を作り、そこで端末を起動 |
 | 左・下・上・右半分に寄せる | Option+H/J/K/L | Accessibility API でフォーカス中のウィンドウの frame を書き込む |
-| ウィンドウを別 workspace へ移動 | — | v1 では非対応 |
+| 画面いっぱいに広げる (fullscreen の代わり) | Option+F | 可視領域いっぱいの frame を書き込む。ネイティブの全画面になっている窓なら、先に全画面を解いて元の Desktop に戻す |
+| 隣の窓にフォーカスを移す | Option+Shift+H/J/K/L | 今の Desktop の窓の位置から、その向きで中心が一番近い窓を選び、Accessibility API で手前に出す (Hyprland の movefocus)。端では折り返さない |
+| 直前の workspace へ戻る | Option+Tab | 直前にいた workspace の ID へ行く (Hyprland の workspace previous)。消えていれば作り直す |
+| 今の workspace を並べ直す | Option+A | 窓の数に合った標準の配置をもう一度押す。手で崩した配置を戻すとき用 |
+| フォーカス中の窓を閉じる | Option+C | 閉じるボタンを押す (Hyprland の killactive)。アプリは終了しない |
+| フォーカス中の窓を workspace N へ移す | Option+Shift+1…9 | タイトルバーを掴んで数 px ドラッグした状態で Ctrl+数字 を送り、切り替わってから離す (Hyprland の movetoworkspace。窓と一緒に移る)。約 1.5 秒かかり、その間カーソルが動く。全画面と最小化の窓は移せない |
 
-ホットキーは `RegisterEventHotKey` (Carbon) でプロセス内に持つ。skhd などの外部デーモンは要らない。
+ネイティブの全画面は使わない。全画面の窓は別の Space に入って workspace の外に出てしまい、戻る先の Space も公開 API では選べないため、Hyprland の fullscreen に当たる操作は「窓を画面いっぱいの大きさにする」に置き換えている。
+
+ホットキーは CGEventTap でプロセス内に持つ。skhd などの外部デーモンは要らない。`RegisterEventHotKey` (Carbon) は Option だけを修飾キーにすると実機で発火しなかったので使っていない。キー監視は手で押した Ctrl+数字 も見ているので、air-eater を通さずに切り替えた Desktop も番号が分かる (トラックパッドのスワイプは分からない)。
 
 ## 事前設定
 
 1. Mission Control で Desktop を 9 個作る
 2. システム設定 ▸ キーボード ▸ キーボードショートカット ▸ Mission Control で「デスクトップ 1〜9 へ切り替え」(Ctrl+1…9) を有効にする
 3. システム設定 ▸ デスクトップと Dock で「最新の使用状況に基づいて操作スペースを並べ替える」を OFF にする
-4. 初回起動時にアクセシビリティ権限を許可する
+4. 同じ画面で「アプリケーションの切り替えで、アプリケーションのウインドウが開いている操作スペースに移動」を OFF にする。ON だと、空の Desktop に着いたとき前面になった別のアプリ (隣の全画面アプリなど) の Space へ移されてしまう
+5. 初回起動時にアクセシビリティ権限を許可する
 
 ## 開発
 
@@ -93,7 +120,7 @@ direnv を使わない場合は `nix develop` でシェルに入る。
 
 - [x] ホットキーを握って Space を切り替える
 - [x] マーカーウィンドウで現在の Space を特定する
-- [ ] AXObserver でウィンドウの生成・破棄を追跡する (PoC は 1 秒ごとの走査)
+- [x] AXObserver でウィンドウの生成・破棄を追跡する (通知は欠けることがあるので 2 秒ごとの走査を保険に残す)
 - [x] 論理番号の導出と新規 workspace でのアプリ起動
 - [x] 半分割
 - [ ] 設定ファイルと永続化

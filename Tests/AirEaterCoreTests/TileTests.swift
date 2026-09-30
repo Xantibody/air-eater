@@ -24,3 +24,10 @@ extension TileTests {
     #expect(tile.frame(in: Self.visible) == expected)
   }
 }
+
+extension TileTests {
+  // 全画面の代わり。ネイティブの全画面は別の Space を作ってしまうので、可視領域いっぱいに広げるだけにする
+  @Test func fillIsTheWholeVisibleFrame() {
+    #expect(Tile.fill.frame(in: Self.visible) == Self.visible)
+  }
+}

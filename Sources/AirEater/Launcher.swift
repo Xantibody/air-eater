@@ -1,7 +1,9 @@
 import AppKit
 
-/// 新しい workspace で開くアプリ。先に見つかったものを使う
-private let terminalBundleIDs = ["com.mitchellh.ghostty", "com.apple.Terminal"]
+/// Option+Return で開く端末。先に見つかったものを使う
+private let terminalBundleIDs = [
+  "net.kovidgoyal.kitty", "com.mitchellh.ghostty", "com.apple.Terminal",
+]
 
 /// 端末を新しいインスタンスとして起動する。
 /// 起動済みのアプリを openApplication すると既存ウィンドウのある Space へ飛ばされるので、
@@ -13,14 +15,17 @@ func launchTerminal() async {
     let url = terminalBundleIDs.lazy.compactMap(workspace.urlForApplication(withBundleIdentifier:))
       .first
   else {
-    print("air-eater: 端末アプリが見つかりません: \(terminalBundleIDs)")
+    log("端末アプリが見つかりません: \(terminalBundleIDs)")
     return
   }
   let configuration = NSWorkspace.OpenConfiguration()
   configuration.createsNewApplicationInstance = true
   do {
+    // 戻り値の NSRunningApplication は、起動用のラッパーを挟むアプリ (Nix の kitty) では
+    // pid が -1 になり当てにならないので使わない
     _ = try await workspace.openApplication(at: url, configuration: configuration)
+    log("\(url.lastPathComponent) を新しいインスタンスで起動した")
   } catch {
-    print("air-eater: \(url.lastPathComponent) を起動できませんでした: \(error)")
+    log("\(url.lastPathComponent) を起動できませんでした: \(error)")
   }
 }
